@@ -2,6 +2,8 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-green.svg)](https://www.python.org/)
+[![Version 2.4.0](https://img.shields.io/badge/version-2.4.0-orange.svg)](https://github.com/hnytgl/WafBypass)
+[![CI](https://github.com/hnytgl/WafBypass/actions/workflows/ci.yml/badge.svg)](https://github.com/hnytgl/WafBypass/actions/workflows/ci.yml)
 
 > 攻击即防御 —— 了解你的敌人，理解你的目标
 
@@ -11,8 +13,40 @@
 
 ---
 
+## 当前版本：v2.4.0
+
+本次更新重点增强了绕过脚本引擎，同时完善了安装、安全性、测试和跨平台支持。
+
+### v2.4.0 更新内容
+
+- 新增受预算约束的 **2–3 层 Tamper 自动组合链**
+- 新增 `balanced`、`sqli`、`xss`、`encoding` 四种组合档案
+- 新增组合深度、候选预算、随机变体和固定种子参数
+- 新增 `sql_versioned_keywords`、`selective_urlencode`、`html_hex_entities` 三个脚本
+- 修复 `unicode_normalize` 无实际转换的问题，现共有 **64 个可执行脚本**
+- 修复 HTTP 403/500 等阻断响应可能被误判为绕过成功的问题
+- 组合链结果现在可以写入缓存、JSON 输出和 HTML 报告
+- 默认启用 TLS 证书校验；授权的自签名环境可使用 `--insecure`
+- 修复 SQLite 缓存字段错位、重复记录和 Tamper 保存问题
+- 移除仓库内嵌凭据，异常上报改为生成本地脱敏 Issue 草稿
+- 使用 `pyproject.toml`、Python 3.12 精简 Docker 镜像及跨平台 CI
+- 新增 **15 项测试**，并验证全部 64 个 Tamper 模块可导入和执行
+
+快速体验新版组合引擎：
+
+```bash
+wafbypass -u "https://lab.example/?id=1" --payload-type sqli \
+  --tamper-profile sqli --tamper-chain-depth 2 \
+  --tamper-chain-budget 16 --tamper-variants 2 --tamper-seed 42
+```
+
+> 请仅对自己拥有或已获得明确授权的目标进行测试。
+
+---
+
 ## 目录
 
+- [当前版本：v2.4.0](#当前版本v240)
 - [功能特性](#功能特性)
 - [可检测的防火墙](#可检测的防火墙)
 - [可用的绕过脚本](#可用的绕过脚本)
