@@ -15,20 +15,19 @@ except ImportError:
 
 import requests
 from bs4 import BeautifulSoup
-from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
 import lib.formatter
 import lib.database
 
-warnings.simplefilter('ignore', InsecureRequestWarning)
 try:
     import yaml
     warnings.simplefilter("ignore", yaml.YAMLLoadWarning)
 except:
     pass
 
-# version number <major>.<minor>.<commit>
-VERSION = "2.0.0"
+# version number <major>.<minor>.<patch>
+VERSION = "2.4.0"
+TLS_VERIFY = True
 
 # version string
 VERSION_TYPE = "($dev)" if VERSION.count(".") > 1 else "($stable)"
@@ -69,8 +68,9 @@ PROTOCOL_DETECTION = re.compile("http(s)?")
 # check if a query is in a URL or not
 URL_QUERY_REGEX = re.compile(r"(.*)[?|#](.*){1}\=(.*)")
 
-# current working directory
-CUR_DIR = os.getcwd()
+# Project/package root. Resource discovery must not depend on the directory from
+# which the CLI was launched.
+CUR_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # path to our home directory
 HOME = "{}/.wafbypass".format(os.path.expanduser("~"))
@@ -106,13 +106,6 @@ CSV_FILE_PATH = "{}/csv_output".format(HOME)
 
 # for when an issue occurs but is not processed due to an error
 UNPROCESSED_ISSUES_PATH = "{}/unprocessed_issues".format(HOME)
-
-# request token path
-try:
-    TOKEN_PATH = "{}/content/files/auth.key".format(CUR_DIR)
-    open(TOKEN_PATH).close()
-except IOError:
-    TOKEN_PATH = "{}/files/auth.key".format(HOME)
 
 # known POST strings (I'll probably think of more later)
 try:
@@ -234,6 +227,11 @@ def validate_url(url):
     return URL_VALIDATION.match(url)
 
 
+def configure_tls_verification(verify=True):
+    global TLS_VERIFY
+    TLS_VERIFY = bool(verify)
+
+
 def get_query(url):
     """
     get the query parameter out of a URL
@@ -254,8 +252,9 @@ def get_page(url, **kwargs):
     provided_headers = kwargs.get("provided_headers", None)
     throttle = kwargs.get("throttle", 0)
     req_timeout = kwargs.get("timeout", 15)
-    request_method = kwargs.get("request_method", "GET")
-    post_data = kwargs.get("post_data", " ")
+    request_method = str(kwargs.get("request_method", "GET")).upper()
+    post_data = kwargs.get("post_data", " ") or ""
+    verify_tls = kwargs.get("verify_tls", TLS_VERIFY)
 
     if post_data.isspace():
         items = list(post_data)
@@ -288,7 +287,15 @@ def get_page(url, **kwargs):
     time.sleep(throttle)
 
     try:
-        req = req(url, headers=headers, proxies=proxies, timeout=req_timeout, data=post_data, verify=False)
+        request_kwargs = {
+            "headers": headers,
+            "proxies": proxies,
+            "timeout": req_timeout,
+            "verify": verify_tls,
+        }
+        if request_method == "POST":
+            request_kwargs["data"] = post_data
+        req = req(url, **request_kwargs)
         soup = BeautifulSoup(req.content, "html.parser")
         return "{} {}".format(request_method, get_query(url)), req.status_code, soup, req.headers
     except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.TooManyRedirects):
@@ -297,7 +304,7 @@ def get_page(url, **kwargs):
         if "timed out" in str(e).lower():
             return error_retval
         else:
-            raise e.__class__(e.message)
+            raise e.__class__(str(e))
 
 
 def get_random_agent(path="{}/files/user_agents.txt"):
@@ -832,21 +839,7 @@ def shuffle_list(l):
     """
     shuffle a list in a cryptographically secure manner
     """
-    try:
-        import secrets
-        secrets_imported = True
-    except ImportError:
-        secrets_imported = False
-
-    for x in range(1, len(l)):
-        if secrets_imported:
-            y = secrets.SystemRandom().randint(0, len(l))
-        else:
-            y = random.SystemRandom().randint(0, len(l))
-        try:
-            l[x], l[y] = l[y], l[x]
-        except IndexError:
-            l[x-1], l[y-1] = l[y-1], l[x-1]
+    random.SystemRandom().shuffle(l)
     return l
 
 

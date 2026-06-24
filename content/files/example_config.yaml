@@ -31,6 +31,11 @@ detection:
   skip_bypass: false
   verify_number: 5
   tamper_display: 5
+  tamper_profile: auto  # auto / balanced / sqli / xss / encoding
+  tamper_chain_depth: 1  # 1=关闭组合，最大3
+  tamper_chain_budget: 24
+  tamper_variants: 1  # 1-5
+  tamper_seed: null  # 固定整数可复现随机脚本结果
   determine_webserver: true
 
 # 输出配置

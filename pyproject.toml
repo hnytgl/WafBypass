@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wafbypass"
+version = "2.4.0"
+description = "WAF detection and authorized security testing toolkit"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "GPL-3.0-only" }
+authors = [{ name = "hnytgl" }]
+dependencies = [
+    "beautifulsoup4>=4.12.0",
+    "requests>=2.31.0",
+    "PyYAML>=6.0",
+]
+keywords = ["waf", "security-testing", "web-security"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+]
+
+[project.optional-dependencies]
+socks = ["PySocks>=1.7.1"]
+dev = ["build>=1.2", "pytest>=8.0"]
+
+[project.scripts]
+wafbypass = "trigger.main:main"
+
+[project.urls]
+Homepage = "https://github.com/hnytgl/WafBypass"
+Issues = "https://github.com/hnytgl/WafBypass/issues"
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+include = ["content*", "lib*", "trigger*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+content = ["files/*"]
+
+[tool.setuptools.exclude-package-data]
+"*" = ["__pycache__/*", "*.pyc", "*.pyo"]

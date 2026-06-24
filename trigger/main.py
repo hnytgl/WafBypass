@@ -12,6 +12,7 @@ from content import (
 )
 from lib.settings import (
     configure_request_headers,
+    configure_tls_verification,
     auto_assign,
     get_page,
     WAF_REQUEST_DETECTION_PAYLOADS,
@@ -55,6 +56,7 @@ except Exception:
 
 def main():
     opt = WAFBypassParser().cmd_parser()
+    configure_tls_verification(not opt.disableTlsVerification)
 
     if not len(sys.argv) > 1:
         error("you failed to provide an option, redirecting to help menu")
@@ -219,6 +221,15 @@ def main():
         info("total of {} tamper scripts available".format(len(tamper_list)))
         exit(0)
 
+    if opt.listTamperProfiles:
+        from lib.tamper_engine import available_profiles
+
+        for profile, tampers in available_profiles().items():
+            print("{}:".format(profile))
+            for tamper in tampers:
+                print("  - {}".format(tamper))
+        exit(0)
+
     if opt.viewPossibleWafs:
         import importlib
 
@@ -309,6 +320,12 @@ def main():
                 opt.payloadType = config["payloads"]["type"]
             if config and config.get("output", {}).get("html_report"):
                 opt.htmlReport = config["output"]["html_report"]
+            detection_config = config.get("detection", {}) if config else {}
+            opt.tamperProfile = detection_config.get("tamper_profile", opt.tamperProfile)
+            opt.tamperChainDepth = detection_config.get("tamper_chain_depth", opt.tamperChainDepth)
+            opt.tamperChainBudget = detection_config.get("tamper_chain_budget", opt.tamperChainBudget)
+            opt.tamperVariants = detection_config.get("tamper_variants", opt.tamperVariants)
+            opt.tamperSeed = detection_config.get("tamper_seed", opt.tamperSeed)
             info("loaded configuration from '{}'".format(opt.configFile))
         except ImportError:
             warn("YAML library not available, config file ignored. Install: pip install pyyaml")
@@ -409,7 +426,10 @@ def main():
                 req_timeout=opt.requestTimeout, post_data=opt.postRequestData,
                 request_type=request_type, check_server=opt.determineWebServer,
                 threaded=opt.threaded, force_file_creation=opt.forceFileCreation,
-                save_copy_of_file=opt.outputDirectory, html_report=opt.htmlReport
+                save_copy_of_file=opt.outputDirectory, html_report=opt.htmlReport,
+                tamper_profile=opt.tamperProfile, tamper_chain_depth=opt.tamperChainDepth,
+                tamper_chain_budget=opt.tamperChainBudget, tamper_variants=opt.tamperVariants,
+                tamper_seed=opt.tamperSeed, payload_type=opt.payloadType
             )
         elif any(o is not None for o in [opt.runMultipleWebsites, opt.burpRequestFile]):
             info("reading from '{}'".format(opt.runMultipleWebsites or opt.burpRequestFile))
@@ -481,7 +501,10 @@ def main():
                     req_timeout=opt.requestTimeout, post_data=opt.postRequestData,
                     request_type=request_type, check_server=opt.determineWebServer,
                     threaded=opt.threaded, force_file_creation=opt.forceFileCreation,
-                    save_copy_of_file=opt.outputDirectory, html_report=opt.htmlReport
+                    save_copy_of_file=opt.outputDirectory, html_report=opt.htmlReport,
+                    tamper_profile=opt.tamperProfile, tamper_chain_depth=opt.tamperChainDepth,
+                    tamper_chain_budget=opt.tamperChainBudget, tamper_variants=opt.tamperVariants,
+                    tamper_seed=opt.tamperSeed, payload_type=opt.payloadType
                 )
                 time.sleep(0.5)
 
@@ -534,7 +557,10 @@ def main():
                             req_timeout=opt.requestTimeout, post_data=opt.postRequestData,
                             request_type=request_type, check_server=opt.determineWebServer,
                             threaded=opt.threaded, force_file_creation=opt.forceFileCreation,
-                            save_copy_of_file=opt.outputDirectory
+                            save_copy_of_file=opt.outputDirectory, html_report=opt.htmlReport,
+                            tamper_profile=opt.tamperProfile, tamper_chain_depth=opt.tamperChainDepth,
+                            tamper_chain_budget=opt.tamperChainBudget, tamper_variants=opt.tamperVariants,
+                            tamper_seed=opt.tamperSeed, payload_type=opt.payloadType
                         )
                         time.sleep(0.5)
             else:

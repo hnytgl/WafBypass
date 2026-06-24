@@ -1,9 +1,11 @@
 import os
+import re
 import time
-import json
+from html import escape
 
 import lib.settings
 import lib.formatter
+import lib.tamper_engine
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="zh-CN">
@@ -152,13 +154,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 def generate_html_report(url, detected_wafs, working_tampers, headers_dict,
                          status_code, webserver, payload_count, method, timeline_events):
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    escaped_target = escape(str(url), quote=True)
 
     if detected_wafs:
         if isinstance(detected_wafs, str):
             detected_wafs = [detected_wafs]
         waf_count = len(detected_wafs)
         waf_list = "".join(
-            '<tr><td>{}</td><td><span class="badge badge-danger">DETECTED</span></td></tr>'.format(w)
+            '<tr><td>{}</td><td><span class="badge badge-danger">DETECTED</span></td></tr>'.format(
+                escape(str(w), quote=True)
+            )
             for w in detected_wafs
         )
         protection_badge = '<span class="badge badge-danger">PROTECTED</span>'
@@ -171,17 +176,18 @@ def generate_html_report(url, detected_wafs, working_tampers, headers_dict,
         tamper_count = len(working_tampers)
         tamper_rows = ""
         for desc, example, load_path in working_tampers:
-            try:
-                lp = str(load_path).split(" ")[1].replace("'", "")
-            except IndexError:
-                lp = str(load_path)
+            lp = lib.tamper_engine.tamper_path(load_path)
             tamper_rows += (
                 '<tr>'
                 '<td>{}</td>'
                 '<td><code class="tamper-example">{}</code></td>'
                 '<td><span class="tamper-path">{}</span></td>'
                 '</tr>'
-            ).format(desc, example[:120], lp)
+            ).format(
+                escape(str(desc), quote=True),
+                escape(str(example)[:120], quote=True),
+                escape(str(lp), quote=True),
+            )
         tamper_section = (
             '<table><thead><tr><th>Technique</th><th>Example Payload</th><th>Load Path</th></tr></thead>'
             '<tbody>{}</tbody></table>'.format(tamper_rows)
@@ -193,7 +199,10 @@ def generate_html_report(url, detected_wafs, working_tampers, headers_dict,
     if headers_dict:
         header_rows = ""
         for key, value in sorted(headers_dict.items()):
-            header_rows += '<tr><td><strong>{}</strong></td><td>{}</td></tr>'.format(key, str(value)[:200])
+            header_rows += '<tr><td><strong>{}</strong></td><td>{}</td></tr>'.format(
+                escape(str(key), quote=True),
+                escape(str(value)[:200], quote=True),
+            )
         headers_section = (
             '<table><thead><tr><th>Header Name</th><th>Value</th></tr></thead>'
             '<tbody>{}</tbody></table>'.format(header_rows)
@@ -208,18 +217,21 @@ def generate_html_report(url, detected_wafs, working_tampers, headers_dict,
             '<div class="time">{}</div>'
             '<div class="event">{}</div>'
             '</div>'
-        ).format(evt["time"], evt["event"])
+        ).format(
+            escape(str(evt.get("time", "")), quote=True),
+            escape(str(evt.get("event", "")), quote=True),
+        )
 
     html = HTML_TEMPLATE.format(
-        target=url,
-        version=lib.settings.VERSION,
+        target=escaped_target,
+        version=escape(str(lib.settings.VERSION), quote=True),
         timestamp=timestamp,
         waf_count=waf_count,
         tamper_count=tamper_count,
         payload_count=payload_count,
-        status_code=status_code,
-        webserver=webserver or "Unknown",
-        method=method,
+        status_code=escape(str(status_code), quote=True),
+        webserver=escape(str(webserver or "Unknown"), quote=True),
+        method=escape(str(method), quote=True),
         protection_badge=protection_badge,
         waf_section=(
             '<table><thead><tr><th>Firewall Name</th><th>Status</th></tr></thead>'
@@ -244,10 +256,13 @@ def save_html_report(url, detected_wafs, working_tampers, headers_dict,
     if output_dir is None:
         output_dir = lib.settings.HOME
 
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
 
-    safe_name = url.replace("https://", "").replace("http://", "").replace("/", "_").replace(":", "_")[:60]
+    safe_name = re.sub(
+        r"[^A-Za-z0-9._-]+",
+        "_",
+        url.replace("https://", "").replace("http://", ""),
+    ).strip("._")[:60] or "target"
     filename = "wafbypass_report_{}_{}.html".format(
         safe_name, time.strftime("%Y%m%d_%H%M%S")
     )

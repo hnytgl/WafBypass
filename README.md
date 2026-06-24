@@ -1,7 +1,7 @@
 # WAFBypass - 高级Web应用防火墙检测与绕过工具
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Python 3.7+](https://img.shields.io/badge/Python-3.7%2B-green.svg)](https://www.python.org/)
+[![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-green.svg)](https://www.python.org/)
 
 > 攻击即防御 —— 了解你的敌人，理解你的目标
 
@@ -30,7 +30,7 @@
 ## 功能特性
 
 - **WAF检测**：支持检测 **112+** 种Web应用防火墙和防护系统
-- **自动绕过**：内置 **61** 种绕过脚本（Tamper Scripts）
+- **自动绕过**：内置 **64** 种绕过脚本（Tamper Scripts），支持受预算约束的 2–3 层组合链
 - **多种输入方式**：支持单URL、批量URL列表、Burp Suite导出文件、Googler JSON文件
 - **多种输出格式**：支持 JSON、YAML、CSV 格式化输出
 - **数据库缓存**：自动缓存检测结果，避免重复扫描
@@ -69,7 +69,7 @@ wafbypass --wafs
 
 ## 可用的绕过脚本
 
-WAFBypass 内置 **61** 种绕过脚本，涵盖以下技术：
+WAFBypass 内置 **64** 种绕过脚本，涵盖以下技术：
 
 | 类型 | 脚本示例 |
 |------|---------|
@@ -85,6 +85,22 @@ WAFBypass 内置 **61** 种绕过脚本，涵盖以下技术：
 查看完整列表：
 ```bash
 wafbypass --tampers
+```
+
+### 自动组合链
+
+v2.3 的组合引擎可以按 Payload 类型生成有序脚本链，并限制深度、候选数量和随机变体，避免组合数量失控。改变完整 HTTP 请求结构的脚本不会被自动加入普通 URL 编码链。
+
+```bash
+# 查看内置档案
+wafbypass --tamper-profiles
+
+# 授权测试环境：SQLi 档案、最多两层、最多 16 条组合链
+wafbypass -u "https://lab.example/?id=1" --payload-type sqli \
+  --tamper-profile sqli --tamper-chain-depth 2 --tamper-chain-budget 16
+
+# 为随机型脚本尝试多个可复现变体
+wafbypass -u "https://lab.example/?q=test" --tamper-variants 3 --tamper-seed 42
 ```
 
 ### Payload分片绕过技术
@@ -123,11 +139,8 @@ python wafbypass -u "https://target.com/?q=test" -p "' UNION SELECT NULL--" \
 git clone https://github.com/hnytgl/wafbypass.git
 cd wafbypass
 
-# 安装依赖
-pip install -r requirements.txt
-
-# 安装（可选）
-python setup.py install
+# 安装
+python -m pip install .
 ```
 
 ### 方式二：直接运行
@@ -144,16 +157,16 @@ python wafbypass --help
 ```bash
 git clone https://github.com/hnytgl/wafbypass.git
 cd wafbypass
-virtualenv venv
+python -m venv venv
 source venv/bin/activate  # Linux/Mac
 # venv\Scripts\activate   # Windows
-pip install -r requirements.txt
-python wafbypass --help
+python -m pip install .
+wafbypass --help
 ```
 
 ### 环境要求
 
-- Python 3.7+
+- Python 3.9+
 - pip 包管理器
 - （可选）Tor - 用于匿名扫描
 - （可选）PySocks - 用于SOCKS代理支持
@@ -228,6 +241,7 @@ python wafbypass -u https://example.com/ --traffic traffic.log
 | `--force-ssl` | 强制使用HTTPS连接 |
 | `--throttle SECONDS` | 每次请求之间的延迟（秒） |
 | `--timeout SECONDS` | 请求超时时间（默认15秒） |
+| `--insecure` | 禁用TLS证书校验（仅用于已授权的自签名测试环境） |
 | `-P, --post` | 使用POST请求方式 |
 | `-D, --data` | POST请求数据 |
 | `-t, --threads` | 并发线程数 |
@@ -239,6 +253,11 @@ python wafbypass -u https://example.com/ --traffic traffic.log
 |------|------|
 | `-e PAYLOAD LOAD-PATH` | 使用指定绕过脚本编码Payload |
 | `-el PATH LOAD-PATH` | 使用绕过脚本编码文件中的所有Payload |
+| `--tamper-profile PROFILE` | 自动组合档案：auto/balanced/sqli/xss/encoding |
+| `--tamper-chain-depth 1-3` | 自动组合最大深度；1表示关闭组合 |
+| `--tamper-chain-budget INT` | 自动生成的组合候选上限（默认24） |
+| `--tamper-variants 1-5` | 随机型脚本的变体尝试次数 |
+| `--tamper-seed INT` | 固定随机种子，便于复现实验 |
 
 ### 输出参数
 
@@ -276,6 +295,7 @@ python wafbypass -u https://example.com/ --traffic traffic.log
 | `-W, --determine-webserver` | 识别后端Web服务器 |
 | `--wafs` | 列出可检测的所有防火墙 |
 | `--tampers` | 列出所有可用的绕过脚本 |
+| `--tamper-profiles` | 列出自动组合链档案 |
 | `--clean` | 清理WAFBypass的主目录 |
 
 ---
@@ -358,7 +378,7 @@ cd wafbypass
 sudo docker build -t wafbypass .
 
 # 运行
-sudo docker run -it wafbypass wafbypass --help
+sudo docker run --rm -it wafbypass --help
 ```
 
 ---
@@ -411,7 +431,7 @@ A: 在 `content/tampers/` 目录下创建新的Python文件，遵循现有的脚
 
 升级内容包括：
 - 新增 26 个WAF检测插件（AWS v2, Azure, GCP, Tencent, Huawei, 奇安信, 山石, 安恒, 启明, 天融信, 火山引擎等），总计112+
-- 新增 25 个绕过脚本（Chunked传输, HPP分片, Multipart分片, SQL注释分片, NULL字节分片, 编码链分片等），总计61个
+- 新增绕过脚本与受预算约束的组合链引擎，总计64个脚本
 - Payload分片绕过技术套件（7项分片策略）
 - HTML专业报告生成（`--html-report`）
 - 6类Payload分类库（SQLi/XSS/XXE/SSTI/LFI/CMDi）

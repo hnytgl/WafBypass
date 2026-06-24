@@ -20,6 +20,7 @@ import lib.formatter
 import lib.database
 import lib.firewall_found
 import lib.report
+import lib.tamper_engine
 
 
 class ScriptQueue(object):
@@ -248,6 +249,12 @@ def get_working_tampers(url, norm_response, payloads, **kwargs):
     max_successful_payloads = kwargs.get("tamper_int", 5)
     throttle = kwargs.get("throttle", 0)
     req_timeout = kwargs.get("timeout", 15)
+    tamper_profile = kwargs.get("tamper_profile", "auto")
+    tamper_chain_depth = kwargs.get("tamper_chain_depth", 1)
+    tamper_chain_budget = kwargs.get("tamper_chain_budget", 24)
+    tamper_variants = max(1, min(int(kwargs.get("tamper_variants", 1)), 5))
+    tamper_seed = kwargs.get("tamper_seed", None)
+    payload_type = kwargs.get("payload_type", "all")
 
     if req_timeout is None:
         lib.formatter.warn(
@@ -266,6 +273,22 @@ def get_working_tampers(url, norm_response, payloads, **kwargs):
     tampers = ScriptQueue(
         lib.settings.TAMPERS_DIRECTORY, lib.settings.TAMPERS_IMPORT_TEMPLATE, verbose=verbose, is_tamper=True
     ).load_scripts()
+    chain_tampers = lib.tamper_engine.build_chain_candidates(
+        tampers,
+        profile=tamper_profile,
+        payload_type=payload_type,
+        max_depth=tamper_chain_depth,
+        budget=tamper_chain_budget,
+        seed=tamper_seed,
+    )
+    if chain_tampers:
+        selected_profile = lib.tamper_engine.resolve_profile(tamper_profile, payload_type)
+        lib.formatter.info(
+            "added {} bounded tamper chains (profile={}, max-depth={})".format(
+                len(chain_tampers), selected_profile, tamper_chain_depth
+            )
+        )
+        tampers.extend(chain_tampers)
 
     if max_successful_payloads > len(tampers):
         lib.formatter.warn(
@@ -279,20 +302,17 @@ def get_working_tampers(url, norm_response, payloads, **kwargs):
     good_tamper_paths = []
     total_tampers = len(tampers)
     total_payloads = len(payloads)
+    total_requests = total_tampers * total_payloads * tamper_variants
 
-    lib.formatter.info("running tampering bypass checks ({} tampers x {} payloads, {} total requests)".format(
-        total_tampers, total_payloads, total_tampers * total_payloads
+    lib.formatter.info("running tampering bypass checks ({} candidates x {} payloads x {} variants, {} total requests)".format(
+        total_tampers, total_payloads, tamper_variants, total_requests
     ))
 
     tamper_idx = 0
     for tamper in tampers:
         tamper_idx += 1
         load = tamper
-        tamper_name = ""
-        try:
-            tamper_name = str(load).split(" ")[1].split(".")[-1].strip(">'")
-        except:
-            tamper_name = str(load.__class__.__name__)
+        tamper_name = lib.tamper_engine.tamper_name(load)
 
         # Always show tamper progress
         _progress = "[{}/{}]".format(tamper_idx, total_tampers)
@@ -301,50 +321,68 @@ def get_working_tampers(url, norm_response, payloads, **kwargs):
         payload_idx = 0
         for vector in payloads:
             payload_idx += 1
-            try:
-                tampered = tamper.tamper(vector)
+            for variant in range(tamper_variants):
+                try:
+                    tampered = lib.tamper_engine.apply_candidate(
+                        tamper, vector, seed=tamper_seed, variant=variant
+                    )
 
-                # Smart URL assembly
-                if "&" in tampered and "=" in tampered and "?" in url:
-                    payloaded_url = "{}&{}".format(url, tampered)
-                elif "&" in tampered and "=" in tampered:
-                    payloaded_url = "{}?{}".format(url, tampered) if "?" not in url else "{}{}".format(url, tampered)
-                else:
-                    payloaded_url = "{}{}".format(url, tampered)
+                    # Smart URL assembly
+                    if "&" in tampered and "=" in tampered and "?" in url:
+                        payloaded_url = "{}&{}".format(url, tampered)
+                    elif "&" in tampered and "=" in tampered:
+                        payloaded_url = "{}?{}".format(url, tampered) if "?" not in url else "{}{}".format(url, tampered)
+                    else:
+                        payloaded_url = "{}{}".format(url, tampered)
 
-                _, status, html, _ = lib.settings.get_page(
-                    payloaded_url, agent=agent, proxy=proxy, verbose=verbose, provided_headers=provided_headers,
-                    throttle=throttle, timeout=req_timeout
-                )
+                    _, status, html, _ = lib.settings.get_page(
+                        payloaded_url, agent=agent, proxy=proxy, verbose=verbose, provided_headers=provided_headers,
+                        throttle=throttle, timeout=req_timeout
+                    )
 
-                if not find_failures(str(html), failed_schema):
-                    if status not in (0, 404):
-                        if 200 <= status < 400 or status in (403, 500):
+                    if not find_failures(str(html), failed_schema):
+                        if status and 200 <= status < 400:
                             try:
                                 if load not in good_tamper_paths:
-                                    working_tampers.add((tamper.__type__, tamper.tamper(tamper.__example_payload__), load))
+                                    example = lib.tamper_engine.apply_candidate(
+                                        tamper,
+                                        tamper.__example_payload__,
+                                        seed=tamper_seed,
+                                        variant=variant,
+                                    )
+                                    working_tampers.add((tamper.__type__, example, load))
                                     good_tamper_paths.append(load)
-                                    lib.formatter.success("bypass found! tamper=[{}] payload=[{}] status=[{}]".format(
-                                        tamper_name, tampered[:60], status
+                                    lib.formatter.success("bypass found! tamper=[{}] variant=[{}] payload=[{}] status=[{}]".format(
+                                        tamper_name, variant + 1, tampered[:60], status
                                     ))
-                            except:
-                                pass
+                            except Exception as error:
+                                if verbose:
+                                    lib.formatter.warn(
+                                        "unable to record tamper result '{}': {}".format(tamper_name, error),
+                                        minor=True,
+                                    )
 
-                if verbose:
-                    _icon = "O" if status and 200 <= status < 400 else "X" if status in (403, 406) else "?"
-                    lib.formatter.debug("  payload {}/{} [{}] status={} len={}".format(
-                        payload_idx, total_payloads, _icon, status, len(str(html))
-                    ))
+                    if verbose:
+                        _icon = "O" if status and 200 <= status < 400 else "X" if status in (403, 406) else "?"
+                        lib.formatter.debug("  payload {}/{} variant {}/{} [{}] status={} len={}".format(
+                            payload_idx, total_payloads, variant + 1, tamper_variants,
+                            _icon, status, len(str(html))
+                        ))
 
-                if len(working_tampers) == max_successful_payloads:
-                    break
-            except RuntimeError:
-                pass
-            except Exception as e:
-                if "'NoneType' object is not iterable" in str(e):
+                    if load in good_tamper_paths or len(working_tampers) == max_successful_payloads:
+                        break
+                except RuntimeError:
                     pass
-                else:
-                    raise e.__class__("Exception caught: {} ~~> {}".format(e.__class__, e.message))
+                except Exception as error:
+                    if verbose:
+                        lib.formatter.warn(
+                            "tamper '{}' variant {} failed: {}".format(
+                                tamper_name, variant + 1, error
+                            ),
+                            minor=True,
+                        )
+            if len(working_tampers) == max_successful_payloads:
+                break
         if len(working_tampers) == max_successful_payloads:
             break
 
@@ -406,7 +444,7 @@ def dictify_output(url, firewalls, tampers):
         retval["apparent working tampers"] = []
         for item in tampers:
             _, _, tamper_script = item
-            to_append = str(tamper_script).split(" ")[1].replace("'", "")
+            to_append = lib.tamper_engine.tamper_path(tamper_script)
             retval["apparent working tampers"].append(to_append)
     else:
         retval["apparent working tampers"] = None
@@ -442,6 +480,12 @@ def detection_main(url, payloads, cursor, **kwargs):
     force_file_creation = kwargs.get("force_file_creation", False)
     save_file_copy_path = kwargs.get("save_copy_of_file", None)
     html_report = kwargs.get("html_report", False)
+    tamper_profile = kwargs.get("tamper_profile", "auto")
+    tamper_chain_depth = kwargs.get("tamper_chain_depth", 1)
+    tamper_chain_budget = kwargs.get("tamper_chain_budget", 24)
+    tamper_variants = kwargs.get("tamper_variants", 1)
+    tamper_seed = kwargs.get("tamper_seed", None)
+    payload_type = kwargs.get("payload_type", "all")
 
     timeline = []
     def _add_timeline(event):
@@ -616,7 +660,10 @@ def detection_main(url, payloads, cursor, **kwargs):
             found_working_tampers = get_working_tampers(
                 url, normal_response, payloads, proxy=proxy, agent=agent, verbose=verbose,
                 tamper_int=tamper_int, provided_headers=provided_headers, throttle=throttle,
-                timeout=req_timeout
+                timeout=req_timeout, tamper_profile=tamper_profile,
+                tamper_chain_depth=tamper_chain_depth, tamper_chain_budget=tamper_chain_budget,
+                tamper_variants=tamper_variants, tamper_seed=tamper_seed,
+                payload_type=payload_type
             )
             if not formatted:
                 lib.settings.produce_results(found_working_tampers)
@@ -727,7 +774,11 @@ def detection_main(url, payloads, cursor, **kwargs):
                 )
             found_working_tampers = get_working_tampers(
                 url, normal_response, payloads, proxy=proxy, agent=agent, verbose=verbose,
-                tamper_int=tamper_int, throttle=throttle, timeout=req_timeout, provided_headers=provided_headers
+                tamper_int=tamper_int, throttle=throttle, timeout=req_timeout,
+                provided_headers=provided_headers, tamper_profile=tamper_profile,
+                tamper_chain_depth=tamper_chain_depth, tamper_chain_budget=tamper_chain_budget,
+                tamper_variants=tamper_variants, tamper_seed=tamper_seed,
+                payload_type=payload_type
             )
             if not formatted:
                 lib.settings.produce_results(found_working_tampers)

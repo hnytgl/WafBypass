@@ -9,14 +9,13 @@ def initialize():
     """
     initialize the database and the HOME directory (~/.wafbypass)
     """
-    if not os.path.exists(lib.settings.DATABASE_FILENAME):
-        # idk why but apparently i never created the directory :|
-        if not os.path.exists(lib.settings.HOME):
-            try:
-                os.makedirs(lib.settings.HOME)
-            except:
-                pass
-    cursor = sqlite3.connect(lib.settings.DATABASE_FILENAME)
+    os.makedirs(lib.settings.HOME, exist_ok=True)
+    conn = sqlite3.connect(
+        lib.settings.DATABASE_FILENAME,
+        isolation_level=None,
+        check_same_thread=False,
+    )
+    cursor = conn.cursor()
     cursor.execute(
         'CREATE TABLE IF NOT EXISTS "cached_payloads" ('
         '`id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,'
@@ -32,8 +31,7 @@ def initialize():
         "`identified_webserver`	TEXT NOT NULL DEFAULT 'N/A'"
         ")"
     )
-    conn = sqlite3.connect(lib.settings.DATABASE_FILENAME, isolation_level=None, check_same_thread=False)
-    return conn.cursor()
+    return cursor
 
 
 def fetch_data(cursor, is_payload=True):
@@ -56,23 +54,33 @@ def insert_payload(payload, cursor):
     insert a payload into the database
     """
     try:
-        is_inserted = False
-        current_cache = fetch_data(cursor, is_payload=True)
-        id_number = len(current_cache) + 1
-        for item in current_cache:
-            _, cache_payload = item
-            if cache_payload == payload:
-                is_inserted = True
-        if not is_inserted:
-            cursor.execute(
-                "INSERT INTO cached_payloads (id,payload) VALUES (?,?)", (id_number, payload)
-            )
+        existing = cursor.execute(
+            "SELECT 1 FROM cached_payloads WHERE payload = ? LIMIT 1", (payload,)
+        ).fetchone()
+        if existing is None:
+            cursor.execute("INSERT INTO cached_payloads (payload) VALUES (?)", (payload,))
     except Exception:
         return False
     return True
 
 
-def insert_url(netloc, working_tampers, identified_protections,  cursor, webserver=None, return_found=False):
+def _serialize_items(values, tamper_results=False):
+    if values is None:
+        return "N/A"
+    if isinstance(values, str):
+        values = [values]
+
+    serialized = []
+    for item in values:
+        if tamper_results and isinstance(item, (tuple, list)) and len(item) >= 3:
+            item = item[2]
+        text = getattr(item, "__name__", str(item)).strip()
+        if text and text not in serialized:
+            serialized.append(text)
+    return ",".join(sorted(serialized)) if serialized else "N/A"
+
+
+def insert_url(netloc, working_tampers, identified_protections, cursor, webserver=None, return_found=False):
     """
     insert the URL into the database for future use, will only insert the netlock of the URL for easier
     caching and quicker checking, so multiple netlocks of the same URL can hypothetically be used IE:
@@ -81,44 +89,28 @@ def insert_url(netloc, working_tampers, identified_protections,  cursor, webserv
      - ssh.foo.bar
     """
     try:
-        is_inserted = False
-        current_cache = fetch_data(cursor, is_payload=False)
-        id_number = len(current_cache) + 1
         if webserver is None:
             webserver = "N/A"
-        for item in current_cache:
-            _, cached_netloc, _, _, _ = item
-            if str(cached_netloc).strip() == str(netloc).strip():
-                if return_found:
-                    return item
-                else:
-                    return False
-        if not is_inserted:
-            if len(identified_protections) > 1:
-                if lib.settings.UNKNOWN_FIREWALL_NAME in identified_protections:
-                    try:
-                        identified_protections.remove(identified_protections.index(lib.settings.UNKNOWN_FIREWALL_NAME))
-                    except:
-                        pass
-                identified_protections = ",".join(identified_protections)
-            else:
-                try:
-                    identified_protections = identified_protections[0]
-                except:
-                    identified_protections = "N/A"
-            if len(working_tampers) > 1:
-                working_tampers = ",".join(working_tampers)
-            else:
-                try:
-                    working_tampers = working_tampers[0]
-                except:
-                    working_tampers = "N/A"
-            cursor.execute(
-                "INSERT INTO cached_urls ("
-                "id,uri,working_tampers,identified_protections,identified_webserver"
-                ") VALUES (?,?,?,?,?)",
-                (id_number, netloc, identified_protections, working_tampers, webserver)
-            )
+        netloc = str(netloc).strip()
+        existing = cursor.execute(
+            "SELECT * FROM cached_urls WHERE uri = ? LIMIT 1", (netloc,)
+        ).fetchone()
+        if existing is not None:
+            return existing if return_found else False
+
+        protections = [
+            item for item in (identified_protections or [])
+            if item != lib.settings.UNKNOWN_FIREWALL_NAME
+        ] if not isinstance(identified_protections, str) else [identified_protections]
+        serialized_tampers = _serialize_items(working_tampers, tamper_results=True)
+        serialized_protections = _serialize_items(protections)
+
+        cursor.execute(
+            "INSERT INTO cached_urls ("
+            "uri,working_tampers,identified_protections,identified_webserver"
+            ") VALUES (?,?,?,?)",
+            (netloc, serialized_tampers, serialized_protections, str(webserver))
+        )
     except Exception:
         return False
     return True

@@ -13,25 +13,20 @@ class StoreDictKeyPairs(Action):
     custom action to create a dict from a provided string in the format of key=value or vey:value
     """
 
-    retval = {}
-
     def __call__(self, parser, namespace, values, option_string=None):
-        # discover what we split by
+        retval = {}
         for kv in values.split(","):
-            if ":" in kv:
-                splitter = ":"
-            else:
-                splitter = "="
-            if kv.count(splitter) != 1:
-                first_equal_index = kv.index(splitter)
-                key = kv[:first_equal_index].strip()
-                value = kv[first_equal_index + 1:].strip()
-                self.retval[key] = value
-            else:
-                k, v = kv.split(splitter)
-                self.retval[k.strip()] = v.strip()
-        # return the attribute as {'foo': 'bar'}
-        setattr(namespace, self.dest, self.retval)
+            splitter = "=" if "=" in kv else ":" if ":" in kv else None
+            if splitter is None:
+                parser.error(
+                    "{} expects comma-separated KEY=VALUE or KEY:VALUE pairs".format(option_string)
+                )
+            key, value = kv.split(splitter, 1)
+            key = key.strip()
+            if not key:
+                parser.error("{} contains an empty header name".format(option_string))
+            retval[key] = value.strip()
+        setattr(namespace, self.dest, retval)
 
 
 class WAFBypassParser(ArgumentParser):
@@ -103,6 +98,8 @@ class WAFBypassParser(ArgumentParser):
                               default=0, help="Provide a sleep time per request (*default=0)")
         req_args.add_argument("--timeout", dest="requestTimeout", type=int, metavar="TIMEOUT",
                               default=15, help="Control the timeout time of the requests (*default=15)")
+        req_args.add_argument("--insecure", dest="disableTlsVerification", action="store_true",
+                              help="Disable TLS certificate verification for authorized test targets")
         req_args.add_argument("-P", "--post", dest="postRequest", action="store_true",
                               help="Send a POST request (*default=GET)")
         req_args.add_argument("-D", "--data", dest="postRequestData", metavar="POST-STRING",
@@ -126,6 +123,43 @@ class WAFBypassParser(ArgumentParser):
                                    help="Encode a file containing payloads (one per line) "
                                         "by passing the path and load path, files can only "
                                         "encoded using a single tamper script load path")
+        encoding_opts.add_argument(
+            "--tamper-profile",
+            choices=["auto", "balanced", "sqli", "xss", "encoding"],
+            default="auto",
+            dest="tamperProfile",
+            help="Select the automatic tamper-chain profile (*default=auto)",
+        )
+        encoding_opts.add_argument(
+            "--tamper-chain-depth",
+            choices=[1, 2, 3],
+            type=int,
+            default=1,
+            dest="tamperChainDepth",
+            help="Maximum automatic tamper-chain depth; 1 disables chaining (*default=1)",
+        )
+        encoding_opts.add_argument(
+            "--tamper-chain-budget",
+            type=int,
+            default=24,
+            dest="tamperChainBudget",
+            help="Maximum generated chain candidates (*default=24)",
+        )
+        encoding_opts.add_argument(
+            "--tamper-variants",
+            choices=range(1, 6),
+            type=int,
+            default=1,
+            dest="tamperVariants",
+            help="Try 1-5 deterministic variants of randomized tampers (*default=1)",
+        )
+        encoding_opts.add_argument(
+            "--tamper-seed",
+            type=int,
+            default=None,
+            dest="tamperSeed",
+            help="Seed randomized tampers for reproducible authorized tests",
+        )
 
         output_opts = parser.add_argument_group("output options",
                                                 "arguments that control how WAFBypass handles output")
@@ -212,6 +246,8 @@ class WAFBypassParser(ArgumentParser):
                           help="Output a list of possible firewalls that can be detected by WAFBypass")
         misc.add_argument("--tampers", action="store_true", dest="listEncodingTechniques",
                           help="Output a list of tamper script load paths with their description")
+        misc.add_argument("--tamper-profiles", action="store_true", dest="listTamperProfiles",
+                          help="Output the built-in automatic tamper-chain profiles")
 
         hidden = parser.add_argument_group()
         hidden.add_argument("--clean", action="store_true", dest="cleanHomeFolder", help=SUPPRESS)
