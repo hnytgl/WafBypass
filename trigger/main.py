@@ -321,6 +321,7 @@ def main():
             if config and config.get("output", {}).get("html_report"):
                 opt.htmlReport = config["output"]["html_report"]
             detection_config = config.get("detection", {}) if config else {}
+            opt.detectionDepth = detection_config.get("detection_depth", opt.detectionDepth)
             opt.tamperProfile = detection_config.get("tamper_profile", opt.tamperProfile)
             opt.tamperChainDepth = detection_config.get("tamper_chain_depth", opt.tamperChainDepth)
             opt.tamperChainBudget = detection_config.get("tamper_chain_budget", opt.tamperChainBudget)
@@ -331,6 +332,10 @@ def main():
             warn("YAML library not available, config file ignored. Install: pip install pyyaml")
         except Exception as e:
             warn("failed to load config file: {}".format(str(e)))
+
+    if opt.detectionDepth not in ("basic", "smart", "full"):
+        warn("invalid detection depth '{}', defaulting to smart".format(opt.detectionDepth), minor=True)
+        opt.detectionDepth = "smart"
 
     if opt.providedPayloads is not None:
         payload_list = [p.strip() if p[0] == " " else p for p in str(opt.providedPayloads).split(",")]
@@ -429,7 +434,8 @@ def main():
                 save_copy_of_file=opt.outputDirectory, html_report=opt.htmlReport,
                 tamper_profile=opt.tamperProfile, tamper_chain_depth=opt.tamperChainDepth,
                 tamper_chain_budget=opt.tamperChainBudget, tamper_variants=opt.tamperVariants,
-                tamper_seed=opt.tamperSeed, payload_type=opt.payloadType
+                tamper_seed=opt.tamperSeed, payload_type=opt.payloadType,
+                detection_depth=opt.detectionDepth
             )
         elif any(o is not None for o in [opt.runMultipleWebsites, opt.burpRequestFile]):
             info("reading from '{}'".format(opt.runMultipleWebsites or opt.burpRequestFile))
@@ -504,7 +510,8 @@ def main():
                     save_copy_of_file=opt.outputDirectory, html_report=opt.htmlReport,
                     tamper_profile=opt.tamperProfile, tamper_chain_depth=opt.tamperChainDepth,
                     tamper_chain_budget=opt.tamperChainBudget, tamper_variants=opt.tamperVariants,
-                    tamper_seed=opt.tamperSeed, payload_type=opt.payloadType
+                    tamper_seed=opt.tamperSeed, payload_type=opt.payloadType,
+                    detection_depth=opt.detectionDepth
                 )
                 time.sleep(0.5)
 
@@ -560,7 +567,8 @@ def main():
                             save_copy_of_file=opt.outputDirectory, html_report=opt.htmlReport,
                             tamper_profile=opt.tamperProfile, tamper_chain_depth=opt.tamperChainDepth,
                             tamper_chain_budget=opt.tamperChainBudget, tamper_variants=opt.tamperVariants,
-                            tamper_seed=opt.tamperSeed, payload_type=opt.payloadType
+                            tamper_seed=opt.tamperSeed, payload_type=opt.payloadType,
+                            detection_depth=opt.detectionDepth
                         )
                         time.sleep(0.5)
             else:

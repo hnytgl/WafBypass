@@ -91,6 +91,9 @@ class WAFBypassParser(ArgumentParser):
                               choices=["sqli", "xss", "xxe", "ssti", "lfi", "cmdi", "all"],
                               default="all",
                               help="Select payload category: sqli, xss, xxe, ssti, lfi, cmdi, all (*default=all)")
+        req_args.add_argument("--detection-depth", dest="detectionDepth", metavar="LEVEL",
+                              choices=["basic", "smart", "full"], default="smart",
+                              help="Control WAF probe coverage: basic, smart, full (*default=smart)")
         req_args.add_argument("--force-ssl", dest="forceSSL", action="store_true",
                               help="Force the assignment of HTTPS instead of HTTP while processing "
                                    "(*default=HTTP unless otherwise specified by URL)")

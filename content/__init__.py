@@ -79,79 +79,115 @@ class DetectionQueue(object):
         self.post_data = kwargs.get("post_data", "")
         self.threads = kwargs.get("threaded", None)
         self.placement = kwargs.get("placement", False)
+        self.detection_depth = kwargs.get("detection_depth", "smart")
         self.threading_queue = queue.Queue()
         self.response_retval = []
 
+    def _place_payload(self, payload):
+        if not self.placement:
+            return self.url + "{}".format(payload)
+        url = self.url.split("*")
+        return "{}{}{}".format(url[0], payload, url[len(url) - 1])
+
+    def _secondary_url(self):
+        parsed = urlparse.urlparse(self.url)
+        return "{}://{}/{}".format(
+            parsed.scheme,
+            parsed.netloc,
+            random.choice(lib.settings.RAND_HOMEPAGES),
+        )
+
+    def _merge_headers(self, extra_headers):
+        headers = {}
+        if isinstance(self.provided_headers, dict):
+            headers.update(self.provided_headers)
+        headers.update(extra_headers)
+        return headers
+
+    def _build_probe_requests(self, waf_vector):
+        primary_url = self._place_payload(waf_vector)
+        requests = [(primary_url, waf_vector, self.provided_headers)]
+
+        if self.detection_depth in ("smart", "full"):
+            encoded_vector = urlparse.quote(waf_vector, safe="")
+            encoded_url = self._place_payload(encoded_vector)
+            if encoded_url != primary_url:
+                requests.append((encoded_url, waf_vector, self.provided_headers))
+
+        requests.append((self._secondary_url(), waf_vector, self.provided_headers))
+
+        if self.detection_depth in ("smart", "full"):
+            header_payload = str(waf_vector)[:120]
+            requests.append((
+                self.url,
+                waf_vector,
+                self._merge_headers({
+                    "X-Forwarded-For": "127.0.0.1, {}".format(header_payload),
+                    "X-Original-URL": "/{}".format(header_payload),
+                    "Referer": primary_url,
+                }),
+            ))
+
+        if self.detection_depth == "full":
+            parsed = urlparse.urlparse(self.url)
+            path_payload = urlparse.quote(str(waf_vector).strip("/"), safe="")
+            path_url = "{}://{}/{}".format(parsed.scheme, parsed.netloc, path_payload)
+            requests.append((path_url, waf_vector, self.provided_headers))
+
+        return requests
+
     def get_response(self):
         response_retval = []
-        strip_url = lambda x: (x.split("/")[0], x.split("/")[2])
-        for i, waf_vector in enumerate(self.payloads):
-            if not self.placement:
-                primary_url = self.url + "{}".format(waf_vector)
-            else:
-                url = self.url.split("*")
-                primary_url = "{}{}{}".format(url[0], waf_vector, url[len(url) - 1])
-            secondary_url = strip_url(self.url)
-            secondary_url = "{}//{}".format(secondary_url[0], secondary_url[1])
-            secondary_url = "{}/{}".format(secondary_url, random.choice(lib.settings.RAND_HOMEPAGES))
+        for waf_vector in self.payloads:
             if self.verbose:
                 lib.formatter.payload(waf_vector.strip())
-            try:
-                if self.verbose:
-                    lib.formatter.debug(
-                        "trying: '{}'".format(primary_url)
-                    )
-                response_retval.append((
-                    lib.settings.get_page(
-                        primary_url, agent=self.agent, proxy=self.proxy, provided_headers=self.provided_headers,
-                        throttle=self.throttle, timeout=self.req_timeout, request_method=self.request_type,
-                        post_data=self.post_data
-                    )
-                ))
-                if self.verbose:
-                    lib.formatter.debug(
-                        "trying: {}".format(secondary_url)
-                    )
-                response_retval.append((
-                    lib.settings.get_page(
-                        secondary_url, agent=self.agent, proxy=self.proxy, provided_headers=self.provided_headers,
-                        throttle=self.throttle, timeout=self.req_timeout, request_method=self.request_type,
-                        post_data=self.post_data
-                )))
-
-            except Exception as e:
-                if "ECONNRESET" in str(e):
-                    lib.formatter.warn(
-                        "possible network level firewall detected (hardware), received an aborted connection"
-                    )
-                    response_retval.append(None)
-                else:
-                    lib.formatter.error(
-                        "failed to obtain target meta-data with payload {}, error: '{}'".format(
-                            waf_vector.strip(), str(e)
+            for probe_url, probe_vector, probe_headers in self._build_probe_requests(waf_vector):
+                try:
+                    if self.verbose:
+                        lib.formatter.debug(
+                            "trying: '{}'".format(probe_url)
                         )
+                    response_retval.append((
+                        lib.settings.get_page(
+                            probe_url, agent=self.agent, proxy=self.proxy, provided_headers=probe_headers,
+                            throttle=self.throttle, timeout=self.req_timeout, request_method=self.request_type,
+                            post_data=self.post_data
+                        )
+                    ))
+
+                except Exception as e:
+                    if "ECONNRESET" in str(e):
+                        lib.formatter.warn(
+                            "possible network level firewall detected (hardware), received an aborted connection"
+                        )
+                        response_retval.append(None)
+                    else:
+                        lib.formatter.error(
+                            "failed to obtain target meta-data with payload {}, error: '{}'".format(
+                                probe_vector.strip(), str(e)
+                            )
+                        )
+                        response_retval.append(None)
+                if self.save_fingerprint and response_retval and response_retval[0] is not None:
+                    lib.settings.create_fingerprint(
+                        self.url,
+                        response_retval[0][2],
+                        response_retval[0][1],
+                        response_retval[0][3],
+                        req_data=response_retval[0][0],
+                        speak=True
                     )
-                    response_retval.append(None)
-            if self.save_fingerprint:
-                lib.settings.create_fingerprint(
-                    self.url,
-                    response_retval[0][2],
-                    response_retval[0][1],
-                    response_retval[0][3],
-                    req_data=response_retval[0][0],
-                    speak=True
-                )
 
         return response_retval
 
     def threader(self):
         # not sure why this is wrapped in parentheses
         while True:
-            url_thread, waf_vector = self.threading_queue.get()
-            self.threaded_get_response_helper(url_thread, waf_vector)
+            url_thread, waf_vector, probe_headers = self.threading_queue.get()
+            self.threaded_get_response_helper(url_thread, waf_vector, probe_headers)
             self.threading_queue.task_done()
 
-    def threaded_get_response_helper(self, url_thread, waf_vector):
+    def threaded_get_response_helper(self, url_thread, waf_vector, probe_headers):
         try:
             if self.verbose:
                 lib.formatter.debug(
@@ -159,7 +195,7 @@ class DetectionQueue(object):
                 )
             self.response_retval.append((
                 lib.settings.get_page(
-                    url_thread, agent=self.agent, proxy=self.proxy, provided_headers=self.provided_headers,
+                    url_thread, agent=self.agent, proxy=self.proxy, provided_headers=probe_headers,
                     throttle=self.throttle, timeout=self.req_timeout, request_method=self.request_type,
                     post_data=self.post_data
                 )
@@ -193,22 +229,12 @@ class DetectionQueue(object):
                         lib.formatter.error("unable to save fingerprint something went wrong")
 
     def threaded_get_response(self):
-        strip_url = lambda x: (x.split("/")[0], x.split("/")[2])
-
-        for i, waf_vector in enumerate(self.payloads):
-            if not self.placement:
-                primary_url = self.url + "{}".format(waf_vector)
-            else:
-                url = self.url.split("*")
-                primary_url = "{}{}{}".format(url[0], waf_vector, url[len(url) - 1])
-            secondary_url = strip_url(self.url)
-            secondary_url = "{}//{}".format(secondary_url[0], secondary_url[1])
-            secondary_url = "{}/{}".format(secondary_url, random.choice(lib.settings.RAND_HOMEPAGES))
+        for waf_vector in self.payloads:
             if self.verbose:
                 lib.formatter.payload(waf_vector.strip())
 
-            self.threading_queue.put((primary_url, waf_vector))
-            self.threading_queue.put((secondary_url, waf_vector))
+            for probe_url, probe_vector, probe_headers in self._build_probe_requests(waf_vector):
+                self.threading_queue.put((probe_url, probe_vector, probe_headers))
 
         for i in range(self.threads):
             t = threading.Thread(target=self.threader)
@@ -486,6 +512,7 @@ def detection_main(url, payloads, cursor, **kwargs):
     tamper_variants = kwargs.get("tamper_variants", 1)
     tamper_seed = kwargs.get("tamper_seed", None)
     payload_type = kwargs.get("payload_type", "all")
+    detection_depth = kwargs.get("detection_depth", "smart")
 
     timeline = []
     def _add_timeline(event):
@@ -556,14 +583,15 @@ def detection_main(url, payloads, cursor, **kwargs):
         responses = DetectionQueue(
             url, payloads, proxy=proxy, agent=agent, verbose=verbose, save_fingerprint=fingerprint_waf,
             provided_headers=provided_headers, traffic_file=traffic_file, throttle=throttle,
-            timeout=req_timeout, request_type=request_type, post_data=post_data, placement=use_placement
+            timeout=req_timeout, request_type=request_type, post_data=post_data, placement=use_placement,
+            detection_depth=detection_depth
         ).get_response()
     elif threaded:
         responses = DetectionQueue(
             url, payloads, proxy=proxy, agent=agent, verbose=verbose, save_fingerprint=fingerprint_waf,
             provided_headers=provided_headers, traffic_file=traffic_file, throttle=throttle,
             timeout=req_timeout, request_type=request_type, post_data=post_data, threaded=threaded,
-            placement=use_placement
+            placement=use_placement, detection_depth=detection_depth
         ).threaded_get_response()
     if traffic_file is not None:
         with open(traffic_file, "a+") as traffic:

@@ -37,7 +37,8 @@
 ```bash
 wafbypass -u "https://lab.example/?id=1" --payload-type sqli \
   --tamper-profile sqli --tamper-chain-depth 2 \
-  --tamper-chain-budget 16 --tamper-variants 2 --tamper-seed 42
+  --tamper-chain-budget 16 --tamper-variants 2 --tamper-seed 42 \
+  --detection-depth smart
 ```
 
 > 请仅对自己拥有或已获得明确授权的目标进行测试。

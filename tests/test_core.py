@@ -122,6 +122,40 @@ class RequestTests(unittest.TestCase):
             settings.configure_tls_verification(True)
 
 
+class DetectionProbeTests(unittest.TestCase):
+    def test_smart_detection_depth_adds_encoded_and_header_probes(self):
+        detector = content.DetectionQueue(
+            "https://example.test/?q=",
+            ["' OR 1=1"],
+            detection_depth="smart",
+        )
+        probes = detector._build_probe_requests("' OR 1=1")
+        urls = [probe[0] for probe in probes]
+        headers = [probe[2] for probe in probes]
+
+        self.assertEqual(4, len(probes))
+        self.assertIn("https://example.test/?q=' OR 1=1", urls)
+        self.assertTrue(any("%27%20OR%201%3D1" in url for url in urls))
+        self.assertTrue(any(
+            isinstance(header, dict) and "X-Original-URL" in header
+            for header in headers
+        ))
+
+    def test_basic_detection_depth_preserves_low_request_count(self):
+        detector = content.DetectionQueue(
+            "https://example.test/?q=",
+            ["<script>alert(1)</script>"],
+            detection_depth="basic",
+        )
+        probes = detector._build_probe_requests("<script>alert(1)</script>")
+
+        self.assertEqual(2, len(probes))
+        self.assertFalse(any(
+            isinstance(probe[2], dict) and "X-Original-URL" in probe[2]
+            for probe in probes
+        ))
+
+
 class IssueDraftTests(unittest.TestCase):
     def test_sensitive_argument_values_are_redacted_without_mutating_input(self):
         args = ["wafbypass", "-u", "https://secret.test", "--verbose"]
@@ -166,6 +200,27 @@ class TamperEngineTests(unittest.TestCase):
             self.assertFalse(
                 any(name in tamper_engine.TERMINAL_TAMPERS for name in names[:-1])
             )
+
+    def test_chain_generation_explores_useful_ordered_permutations(self):
+        modules = [
+            importlib.import_module("content.tampers.keyword_avoidance"),
+            importlib.import_module("content.tampers.randomcase"),
+        ]
+        chains = tamper_engine.build_chain_candidates(
+            modules,
+            profile="sqli",
+            payload_type="sqli",
+            max_depth=2,
+            budget=2,
+        )
+        chain_names = {
+            tuple(tamper_engine.tamper_name(item) for item in chain.tampers)
+            for chain in chains
+        }
+        self.assertEqual({
+            ("keyword_avoidance", "randomcase"),
+            ("randomcase", "keyword_avoidance"),
+        }, chain_names)
 
     def test_seeded_random_tampers_are_reproducible(self):
         randomcase = importlib.import_module("content.tampers.randomcase")

@@ -51,6 +51,10 @@ TAMPER_PROFILES = {
 PAYLOAD_PROFILE_MAP = {
     "sqli": "sqli",
     "xss": "xss",
+    "xxe": "encoding",
+    "ssti": "balanced",
+    "lfi": "encoding",
+    "cmdi": "balanced",
 }
 
 # These scripts change the transport or full request shape rather than only the
@@ -90,6 +94,32 @@ INCOMPATIBLE_GROUPS = (
     {"obfuscatebyhtmlentity", "html_hex_entities"},
     {"lowercase", "randomcase", "uppercase"},
 )
+
+STAGE_WEIGHTS = {
+    "keyword_avoidance": 10,
+    "sql_versioned_keywords": 10,
+    "sql_numeric_bypass": 15,
+    "booleanmask": 15,
+    "sql_comment_fragment": 20,
+    "xss_vector_variation": 10,
+    "obfuscatebyhtmlcomment": 20,
+    "randomcase": 30,
+    "lowercase": 30,
+    "uppercase": 30,
+    "unicode_normalize": 40,
+    "whitespace_variation": 50,
+    "space2comment": 50,
+    "space2randomblank": 50,
+    "obfuscatebyhtmlentity": 70,
+    "html_hex_entities": 70,
+    "selective_urlencode": 90,
+    "urlencode": 100,
+    "urlencodeall": 100,
+    "doubleurlencode": 110,
+    "tripleurlencode": 120,
+    "nested_encoding": 120,
+    "base64encode": 130,
+}
 
 
 def tamper_name(tamper):
@@ -175,6 +205,21 @@ def _valid_chain(tampers):
     return not any(name in TERMINAL_TAMPERS for name in names[:-1])
 
 
+def _chain_score(tampers, profile_names):
+    names = [tamper_name(tamper) for tamper in tampers]
+    profile_index = {
+        name: index
+        for index, name in enumerate(profile_names)
+    }
+    stage_score = sum(
+        abs(STAGE_WEIGHTS.get(names[index], 60) - (index * 40))
+        for index in range(len(names))
+    )
+    profile_score = sum(profile_index.get(name, 99) for name in names)
+    terminal_bonus = -20 if names[-1] in TERMINAL_TAMPERS else 0
+    return (stage_score + profile_score + terminal_bonus, len(names), "+".join(names))
+
+
 def build_chain_candidates(
     loaded_tampers,
     profile="auto",
@@ -199,11 +244,22 @@ def build_chain_candidates(
     ]
 
     candidates = []
+    seen = set()
     max_depth = min(max(int(max_depth), 2), 3)
     for depth in range(2, max_depth + 1):
-        for combination in itertools.combinations(ordered, depth):
+        for combination in itertools.permutations(ordered, depth):
+            names = tuple(tamper_name(tamper) for tamper in combination)
+            if names in seen:
+                continue
+            seen.add(names)
             if _valid_chain(combination):
-                candidates.append(TamperChain(combination, seed=seed))
-                if len(candidates) >= budget:
-                    return candidates
-    return candidates
+                candidates.append(combination)
+
+    ranked = sorted(
+        candidates,
+        key=lambda candidate: _chain_score(candidate, profile_names),
+    )
+    return [
+        TamperChain(candidate, seed=seed)
+        for candidate in ranked[:budget]
+    ]

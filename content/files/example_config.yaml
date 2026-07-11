@@ -28,6 +28,7 @@ proxy:
 
 # 检测配置
 detection:
+  detection_depth: smart  # basic / smart / full
   skip_bypass: false
   verify_number: 5
   tamper_display: 5
