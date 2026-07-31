@@ -2,7 +2,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-green.svg)](https://www.python.org/)
-[![Version 2.4.0](https://img.shields.io/badge/version-2.4.0-orange.svg)](https://github.com/hnytgl/WafBypass)
+[![Version 2.5.0](https://img.shields.io/badge/version-2.5.0-orange.svg)](https://github.com/hnytgl/WafBypass)
 [![CI](https://github.com/hnytgl/WafBypass/actions/workflows/ci.yml/badge.svg)](https://github.com/hnytgl/WafBypass/actions/workflows/ci.yml)
 
 > 攻击即防御 —— 了解你的敌人，理解你的目标
@@ -13,9 +13,20 @@
 
 ---
 
-## 当前版本：v2.4.0
+## 当前版本：v2.5.0
 
-本次更新重点增强了绕过脚本引擎，同时完善了安装、安全性、测试和跨平台支持。
+本次更新重点扩充了绕过脚本库与组合档案，新增 SQL 运算符/字面量混淆、JS 代码混淆、命令注入与路径穿越混淆等现代绕过技术。
+
+### v2.5.0 更新内容
+
+- 新增 **13 个绕过脚本**，总计 **77 个**，覆盖 6 类攻击类型
+- **SQLi 增强**：运算符混淆（`=`→`BETWEEN`/`LIKE`、`AND`→`&&`、`OR`→`||`）、字符串字面量十六进制（`0x...`）与 `CHAR()`/`UNHEX(HEX())` 编码、数字科学计数法
+- **XSS 增强**：JavaScript 混淆（`\x` 十六进制转义、`eval(String.fromCharCode(...))`、换行拆分参数）、HTML 标签内注入空白符拆分属性
+- **编码增强**：十进制 HTML 实体（`&#60;`）、`\uXXXX` Unicode 转义、空格→`%20`/`%09` 百分号编码
+- **新增 cmdi / lfi / ssti 三类组合档案**（`--tamper-profile`），自动组合链现按攻击类型精确对齐
+- 命令注入混淆（`${IFS}`、引号拆分、反斜杠转义、大小写混淆）、路径穿越混淆（`..%2f`、`%2e%2e%2f`、`....//` 重叠、双重编码）、SSTI 模板混淆
+- 组合引擎新增 2 个终端编码与 2 组新不兼容约束，避免无效组合
+- 新增 **11 项测试**，全部 **29 项**测试通过
 
 ### v2.4.0 更新内容
 
@@ -47,7 +58,7 @@ wafbypass -u "https://lab.example/?id=1" --payload-type sqli \
 
 ## 目录
 
-- [当前版本：v2.4.0](#当前版本v240)
+- [当前版本：v2.5.0](#当前版本v250)
 - [功能特性](#功能特性)
 - [可检测的防火墙](#可检测的防火墙)
 - [可用的绕过脚本](#可用的绕过脚本)
@@ -65,7 +76,7 @@ wafbypass -u "https://lab.example/?id=1" --payload-type sqli \
 ## 功能特性
 
 - **WAF检测**：支持检测 **112+** 种Web应用防火墙和防护系统
-- **自动绕过**：内置 **64** 种绕过脚本（Tamper Scripts），支持受预算约束的 2–3 层组合链
+- **自动绕过**：内置 **77** 种绕过脚本（Tamper Scripts），支持受预算约束的 2–3 层组合链
 - **多种输入方式**：支持单URL、批量URL列表、Burp Suite导出文件、Googler JSON文件
 - **多种输出格式**：支持 JSON、YAML、CSV 格式化输出
 - **数据库缓存**：自动缓存检测结果，避免重复扫描
@@ -104,17 +115,18 @@ wafbypass --wafs
 
 ## 可用的绕过脚本
 
-WAFBypass 内置 **64** 种绕过脚本，涵盖以下技术：
+WAFBypass 内置 **77** 种绕过脚本，涵盖以下技术：
 
 | 类型 | 脚本示例 |
 |------|---------|
-| **编码转换** | URL编码、双重/三重URL编码、Base64编码、Hex编码、HTML实体编码 |
-| **字符混淆** | 大小写随机变换、Unicode规范化、UTF-8过长编码、逆序编码 |
-| **空白字符** | 空格替换(Tab/Comment/+/NULL)、随机空白字符、Chunked传输编码 |
-| **SQL绕过** | SQL注释混淆、双SQL注释、数值操作转换、关键字拆分、参数碎片化 |
-| **XSS绕过** | HTML注释混淆、XSS向量变异、Script标签拆分 |
+| **编码转换** | URL编码、双重/三重URL编码、Base64编码、Hex编码、HTML实体(十六进制/十进制)、Unicode转义、%20百分号编码 |
+| **字符混淆** | 大小写随机变换、Unicode规范化、UTF-8过长编码、逆序编码、`\uXXXX` 转义 |
+| **空白字符** | 空格替换(Tab/Comment/+/NULL/%20)、随机空白字符、Chunked传输编码 |
+| **SQL绕过** | SQL注释混淆、双SQL注释、运算符混淆(`=`→`BETWEEN`/`LIKE`、`AND`→`&&`)、字符串字面量`0x`/`CHAR()`/`UNHEX()`编码、科学计数法、数值操作转换、关键字拆分、参数碎片化 |
+| **XSS绕过** | HTML注释混淆、XSS向量变异、JavaScript混淆(`\x`转义/`fromCharCode`/换行拆分)、标签内空白注入、Script标签拆分 |
 | **HTTP层面** | HTTP参数污染(HPP)、CRLF注入、方法篡改、Content-Type操控 |
 | **Payload分片** | 智能参数分片、HPP多策略、Multipart表单分片、SQL注释分片、管道化请求、NULL字节分片、编码链分片 |
+| **命令/路径混淆** | 命令注入混淆(`${IFS}`/引号拆分/反斜杠转义/大小写)、路径穿越混淆(`..%2f`/`%2e%2e%2f`/`....//`)、SSTI模板混淆 |
 | **高级技巧** | JSON/XML编码、缓冲区溢出填充、嵌套编码、随机垃圾字符 |
 
 查看完整列表：
@@ -133,6 +145,14 @@ wafbypass --tamper-profiles
 # 授权测试环境：SQLi 档案、最多两层、最多 16 条组合链
 wafbypass -u "https://lab.example/?id=1" --payload-type sqli \
   --tamper-profile sqli --tamper-chain-depth 2 --tamper-chain-budget 16
+
+# 命令注入：自动套用 cmd 档案（${IFS}、引号拆分、反斜杠转义等）
+wafbypass -u "https://lab.example/?cmd=1" --payload-type cmdi \
+  --tamper-profile cmdi --tamper-chain-depth 2
+
+# 路径穿越：自动套用 lfi 档案（..%2f、%2e%2e%2f、双重编码等）
+wafbypass -u "https://lab.example/?file=1" --payload-type lfi \
+  --tamper-profile lfi --tamper-chain-depth 2
 
 # 为随机型脚本尝试多个可复现变体
 wafbypass -u "https://lab.example/?q=test" --tamper-variants 3 --tamper-seed 42
@@ -288,7 +308,7 @@ python wafbypass -u https://example.com/ --traffic traffic.log
 |------|------|
 | `-e PAYLOAD LOAD-PATH` | 使用指定绕过脚本编码Payload |
 | `-el PATH LOAD-PATH` | 使用绕过脚本编码文件中的所有Payload |
-| `--tamper-profile PROFILE` | 自动组合档案：auto/balanced/sqli/xss/encoding |
+| `--tamper-profile PROFILE` | 自动组合档案：auto/balanced/sqli/xss/encoding/cmdi/lfi/ssti |
 | `--tamper-chain-depth 1-3` | 自动组合最大深度；1表示关闭组合 |
 | `--tamper-chain-budget INT` | 自动生成的组合候选上限（默认24） |
 | `--tamper-variants 1-5` | 随机型脚本的变体尝试次数 |
@@ -466,7 +486,7 @@ A: 在 `content/tampers/` 目录下创建新的Python文件，遵循现有的脚
 
 升级内容包括：
 - 新增 26 个WAF检测插件（AWS v2, Azure, GCP, Tencent, Huawei, 奇安信, 山石, 安恒, 启明, 天融信, 火山引擎等），总计112+
-- 新增绕过脚本与受预算约束的组合链引擎，总计64个脚本
+- 新增绕过脚本与受预算约束的组合链引擎，总计77个脚本
 - Payload分片绕过技术套件（7项分片策略）
 - HTML专业报告生成（`--html-report`）
 - 6类Payload分类库（SQLi/XSS/XXE/SSTI/LFI/CMDi）
