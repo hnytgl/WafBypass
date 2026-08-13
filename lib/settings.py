@@ -26,7 +26,7 @@ except:
     pass
 
 # version number <major>.<minor>.<patch>
-VERSION = "3.0.0"
+VERSION = "3.1.0"
 TLS_VERIFY = True
 
 # version string
@@ -594,7 +594,7 @@ def parse_burp_request(filename):
     """
     parse an XML file from Burp Suite and make a request based on what is parsed
     """
-    burp_request_regex = re.compile("<url><\S.cdata.", re.I)
+    burp_request_regex = re.compile(r"<url><\S.cdata.", re.I)
     tmp = set()
     retval = []
 

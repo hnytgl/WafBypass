@@ -2,7 +2,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-green.svg)](https://www.python.org/)
-[![Version 3.0.0](https://img.shields.io/badge/version-3.0.0-orange.svg)](https://github.com/hnytgl/WafBypass)
+[![Version 3.1.0](https://img.shields.io/badge/version-3.1.0-orange.svg)](https://github.com/hnytgl/WafBypass)
 [![CI](https://github.com/hnytgl/WafBypass/actions/workflows/ci.yml/badge.svg)](https://github.com/hnytgl/WafBypass/actions/workflows/ci.yml)
 
 > 攻击即防御 —— 了解你的敌人，理解你的目标
@@ -13,9 +13,16 @@
 
 ---
 
-## 当前版本：v3.0.0
+## 当前版本：v3.1.0
 
-**v3.0.0 是自适应智能引擎大版本升级**，核心绕过循环从"静态随机试错"进化为"从响应中学习"的自适应引擎，并新增智能检测置信度、智能报告分析与 4 个新绕过脚本。
+**v3.1.0 是自适应排名精度升级**，重点提升组合链评分、固定种子复现能力与 Unicode 阻断页识别。
+
+### v3.1.0 更新内容
+
+- **稳定的可复现排名**：固定随机种子后，重复排序不再因内部随机状态消耗而改变候选顺序
+- **组合链感知评分**：Tamper Chain 继承各组件的 WAF 家族提示、阶段权重和历史反馈
+- **Unicode 阻断页识别**：支持中文等非拉丁文本的 Unicode 分词与大小写折叠
+- 新增 3 项回归测试，全部 **59 项**测试通过
 
 ### v3.0.0 更新内容
 
@@ -67,7 +74,7 @@ wafbypass -u "https://lab.example/?id=1" --payload-type sqli \
 
 ## 目录
 
-- [当前版本：v3.0.0](#当前版本v300)
+- [当前版本：v3.1.0](#当前版本v310)
 - [功能特性](#功能特性)
 - [可检测的防火墙](#可检测的防火墙)
 - [可用的绕过脚本](#可用的绕过脚本)
@@ -375,7 +382,7 @@ python wafbypass -u https://example.com/ --traffic traffic.log
 $ python wafbypass -u https://example.com/?id=1
 
 [10:30:15][INFO] checking for updates
-[10:30:16][INFO] using User-Agent 'wafbypass/3.0.0'
+[10:30:16][INFO] using User-Agent 'wafbypass/3.1.0'
 [10:30:16][INFO] using default payloads
 [10:30:17][INFO] request type: GET
 [10:30:17][INFO] gathering HTTP responses

@@ -18,6 +18,7 @@ The module is pure stdlib and keeps all randomness on its own
 the global RNG used by ``lib.tamper_engine.apply_candidate``.
 """
 
+import hashlib
 import random
 import re
 
@@ -191,7 +192,8 @@ class BlockSignature(object):
 
     @staticmethod
     def _tokenize(text):
-        return set(re.findall(r"[A-Za-z一-鿿0-9_]+", str(text)))
+        # Unicode-aware alphanumeric tokens; avoids encoding-corrupted ranges.
+        return set(re.findall(r"[^\W_]+", str(text).casefold(), re.UNICODE))
 
     @staticmethod
     def _sim(a, b):
@@ -291,7 +293,7 @@ class AdaptiveRanker(object):
     HINT_WEIGHT = 25.0
 
     def __init__(self, candidates, seed=None, family_priorities=None):
-        self._rng = random.Random(seed) if seed is not None else None
+        self.seed = seed
         self.candidates = list(candidates)
         # Track tried candidates by identity: tamper modules and chains are
         # hashable in production, but tests sometimes pass unhashable stand-ins.
@@ -300,8 +302,15 @@ class AdaptiveRanker(object):
         self.family_stats = {}
         self.requests_made = 0
 
-    def _rand(self):
-        return self._rng.random() if self._rng is not None else random.random()
+    def _jitter(self, candidate):
+        """Return a stable tie-break for seeded runs."""
+        if self.seed is None:
+            return random.random() * 0.01
+        material = "{}\0{}".format(
+            self.seed, lib.tamper_engine.tamper_path(candidate)
+        ).encode("utf-8", errors="replace")
+        value = int(hashlib.sha256(material).hexdigest()[:16], 16)
+        return (value / float(0xFFFFFFFFFFFFFFFF)) * 0.01
 
     def _stats(self, family):
         return self.family_stats.setdefault(family, {
@@ -309,25 +318,38 @@ class AdaptiveRanker(object):
         })
 
     def _base_score(self, candidate):
-        family = family_for(candidate)
-        hint = self.family_priorities.get(family, 0) * self.HINT_WEIGHT
-        stage = lib.tamper_engine.STAGE_WEIGHTS.get(
-            lib.tamper_engine.tamper_name(candidate), 60
+        families = families_for(candidate)
+        hint = sum(self.family_priorities.get(family, 0) for family in families)
+        hint = (hint / max(len(families), 1)) * self.HINT_WEIGHT
+        components = (
+            candidate.tampers
+            if isinstance(candidate, lib.tamper_engine.TamperChain)
+            else (candidate,)
         )
+        stages = [
+            lib.tamper_engine.STAGE_WEIGHTS.get(
+                lib.tamper_engine.tamper_name(component), 60
+            )
+            for component in components
+        ]
+        stage = sum(stages) / len(stages)
         return hint + (100 - min(stage, 100)) / 4.0
 
     def score(self, candidate):
-        family = family_for(candidate)
-        stats = self._stats(family)
-        total = self.SUCCESS_BOOST * stats["bypass"]
-        total += self.CONFIRMED_BOOST if stats["bypass"] else 0.0
-        total -= self.BLOCK_PENALTY * stats["blocked"]
-        if stats["tried"] == 0:
+        families = families_for(candidate)
+        family_stats = [self._stats(family) for family in families]
+        bypasses = sum(stats["bypass"] for stats in family_stats) / len(family_stats)
+        blocked = sum(stats["blocked"] for stats in family_stats) / len(family_stats)
+        tried = sum(stats["tried"] for stats in family_stats) / len(family_stats)
+        total = self.SUCCESS_BOOST * bypasses
+        total += self.CONFIRMED_BOOST if bypasses else 0.0
+        total -= self.BLOCK_PENALTY * blocked
+        if tried == 0:
             total += self.DIVERSITY_BONUS
         else:
-            total += max(0.0, self.DIVERSITY_BONUS - stats["tried"])
+            total += max(0.0, self.DIVERSITY_BONUS - tried)
         # deterministic tie-break so seeded runs are fully reproducible
-        total += self._rand() * 0.01
+        total += self._jitter(candidate)
         return self._base_score(candidate) + total
 
     def order(self, batch_size=None):

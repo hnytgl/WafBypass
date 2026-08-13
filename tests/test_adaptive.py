@@ -59,6 +59,13 @@ class BlockSignatureTests(unittest.TestCase):
         self.assertTrue(sig.likely_blocked(("", 406, "blocked", {})))
         self.assertFalse(sig.likely_blocked(("", 200, "normal html content here", {})))
 
+    def test_unicode_tokens_are_preserved_and_casefolded(self):
+        text = "\u8bf7\u6c42\u5df2\u88ab\u62e6\u622a STRASSE \u7248\u672c2"
+        tokens = lib.adaptive.BlockSignature._tokenize(text)
+        self.assertIn("\u8bf7\u6c42\u5df2\u88ab\u62e6\u622a", tokens)
+        self.assertIn("strasse", tokens)
+        self.assertIn("\u7248\u672c2", tokens)
+
 
 class FamilyResolutionTests(unittest.TestCase):
     def test_family_for_resolves_known_and_unknown(self):
@@ -121,6 +128,23 @@ class AdaptiveRankerTests(unittest.TestCase):
             [lib.tamper_engine.tamper_name(m) for m in first],
             [lib.tamper_engine.tamper_name(m) for m in second],
         )
+
+    def test_seeded_order_is_stable_on_repeated_calls(self):
+        mods = [_module("urlencode"), _module("randomcase"), _module("space2comment")]
+        ranker = lib.adaptive.AdaptiveRanker(mods, seed=42)
+        first = [lib.tamper_engine.tamper_name(m) for m in ranker.order()]
+        second = [lib.tamper_engine.tamper_name(m) for m in ranker.order()]
+        self.assertEqual(first, second)
+
+    def test_chain_inherits_component_family_priority(self):
+        chain = lib.tamper_engine.TamperChain(
+            (_module("randomcase"), _module("urlencode"))
+        )
+        plain = _module("space2comment")
+        ranker = lib.adaptive.AdaptiveRanker(
+            [plain, chain], seed=1, family_priorities={"encoding": 3}
+        )
+        self.assertIs(chain, ranker.order()[0])
 
     def test_diversity_bonus_prefers_untried_families(self):
         ranker = lib.adaptive.AdaptiveRanker(
