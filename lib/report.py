@@ -124,6 +124,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     {waf_section}
   </div>
 
+  {intel_section}
+
   <div class="section">
     <h2>Working Bypass Techniques</h2>
     {tamper_section}
@@ -151,8 +153,92 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </html>"""
 
 
+def _render_intel_section(confidence, coverage, strategy):
+    """Render the Intelligence / Adaptive Analysis HTML section."""
+    if confidence is None and not coverage:
+        return ""
+    if confidence is None:
+        confidence = 0.0
+    coverage = coverage or {}
+    families_tried = coverage.get("families_tried", [])
+    families_bypassed = coverage.get("families_bypassed", [])
+    total_families = coverage.get("total_families", 0)
+    requests_made = coverage.get("requests_made", 0)
+    early_stopped = coverage.get("early_stopped", False)
+
+    if confidence >= 0.7:
+        conf_class, conf_text = "badge-success", "HIGH"
+    elif confidence >= 0.4:
+        conf_class, conf_text = "badge-info", "MEDIUM"
+    else:
+        conf_class, conf_text = "badge-warn", "LOW"
+
+    bypassed_set = set(families_bypassed)
+    tried_set = set(families_tried)
+    rows = ""
+    for family in sorted(tried_set | bypassed_set):
+        if family in bypassed_set:
+            status = '<span class="badge badge-success">BYPASS</span>'
+        elif family in tried_set:
+            status = '<span class="badge badge-warn">TRIED</span>'
+        else:
+            status = '<span class="badge badge-info">-</span>'
+        rows += '<tr><td>{}</td><td>{}</td></tr>'.format(
+            escape(str(family), quote=True), status
+        )
+    if rows:
+        family_table = (
+            '<table><thead><tr><th>Technique Family</th><th>Status</th></tr></thead>'
+            '<tbody>{}</tbody></table>'.format(rows)
+        )
+    else:
+        family_table = '<p style="color:#8b949e;">No tamper families exercised.</p>'
+
+    early_text = (
+        '<span class="badge badge-success">EARLY STOP</span>' if early_stopped
+        else '<span class="badge badge-info">FULL SWEEP</span>'
+    )
+    strategy_html = (
+        '<p style="color:#8b949e;font-size:0.9em;margin-top:12px;">{}</p>'.format(
+            escape(str(strategy), quote=True)
+        )
+        if strategy else ''
+    )
+
+    return (
+        '<div class="section">'
+        '<h2>Intelligence / Adaptive Analysis</h2>'
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;">'
+        '<div class="stat-card"><div class="num">{conf:.0%}</div><div class="lbl">Identification Confidence</div></div>'
+        '<div class="stat-card"><div class="num">{tried}</div><div class="lbl">Families Tried</div></div>'
+        '<div class="stat-card"><div class="num">{bypassed}</div><div class="lbl">Families Bypassed</div></div>'
+        '<div class="stat-card"><div class="num">{total}</div><div class="lbl">Total Families</div></div>'
+        '<div class="stat-card"><div class="num">{requests}</div><div class="lbl">Requests Made</div></div>'
+        '</div>'
+        '<div style="margin-top:16px;">'
+        '<strong>Confidence:</strong> <span class="badge {conf_class}">{conf_text}</span>'
+        '<strong style="margin-left:16px;">Bypass Strategy:</strong> {early_text}'
+        '</div>'
+        '{family_table}'
+        '{strategy_html}'
+        '</div>'
+    ).format(
+        conf=confidence,
+        tried=len(tried_set),
+        bypassed=len(bypassed_set),
+        total=total_families,
+        requests=requests_made,
+        conf_class=conf_class,
+        conf_text=conf_text,
+        early_text=early_text,
+        family_table=family_table,
+        strategy_html=strategy_html,
+    )
+
+
 def generate_html_report(url, detected_wafs, working_tampers, headers_dict,
-                         status_code, webserver, payload_count, method, timeline_events):
+                         status_code, webserver, payload_count, method, timeline_events,
+                         confidence=None, coverage=None, strategy=None):
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     escaped_target = escape(str(url), quote=True)
 
@@ -237,6 +323,7 @@ def generate_html_report(url, detected_wafs, working_tampers, headers_dict,
             '<table><thead><tr><th>Firewall Name</th><th>Status</th></tr></thead>'
             '<tbody>{}</tbody></table>'.format(waf_list)
         ),
+        intel_section=_render_intel_section(confidence, coverage, strategy),
         tamper_section=tamper_section,
         headers_section=headers_section,
         timeline_section=timeline_html,
@@ -247,10 +334,14 @@ def generate_html_report(url, detected_wafs, working_tampers, headers_dict,
 
 def save_html_report(url, detected_wafs, working_tampers, headers_dict,
                      status_code, webserver, payload_count, method, timeline_events,
-                     output_dir=None):
+                     output_dir=None, intel=None):
+    intel = intel or {}
     html = generate_html_report(
         url, detected_wafs, working_tampers, headers_dict,
-        status_code, webserver, payload_count, method, timeline_events
+        status_code, webserver, payload_count, method, timeline_events,
+        confidence=intel.get("confidence"),
+        coverage=intel.get("coverage"),
+        strategy=intel.get("strategy"),
     )
 
     if output_dir is None:

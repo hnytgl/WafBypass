@@ -176,7 +176,7 @@ class TamperEngineTests(unittest.TestCase):
                         "content.tampers.{}".format(filename[:-3])
                     )
                 )
-        self.assertGreaterEqual(len(modules), 77)
+        self.assertGreaterEqual(len(modules), 81)
         for module in modules:
             result = module.tamper(module.__example_payload__)
             self.assertIsInstance(result, str, module.__name__)
@@ -394,6 +394,31 @@ class NewTamperTests(unittest.TestCase):
         self.assertEqual("lfi", tamper_engine.resolve_profile("auto", "lfi"))
         self.assertEqual("ssti", tamper_engine.resolve_profile("auto", "ssti"))
         self.assertEqual("sqli", tamper_engine.resolve_profile("auto", "sqli"))
+
+    def test_unicode_fullwidth_preserves_encodings(self):
+        unicode_fullwidth = self._load("unicode_fullwidth")
+        self.assertEqual("0x61646d696e", unicode_fullwidth.tamper("0x61646d696e"))
+        self.assertIn("%27", unicode_fullwidth.tamper("%27 OR 1=1"))
+        self.assertIn("ＳＥＬＥＣＴ", unicode_fullwidth.tamper("SELECT 1"))
+
+    def test_randomhexcase_randomizes_hex_digit_case(self):
+        randomhexcase = self._load("randomhexcase")
+        self.assertRegex(randomhexcase.tamper("0x61646d696e"), r"^0[xX][0-9A-Fa-f]+$")
+        # no hex sequences means the payload is untouched
+        self.assertEqual("AND 1=1", randomhexcase.tamper("AND 1=1"))
+
+    def test_space2newline_uses_line_feed_variants(self):
+        space2newline = self._load("space2newline")
+        out = space2newline.tamper("a b")
+        self.assertTrue(any(v in out for v in ("%0a", "%0A", "\n", "%0d%0a")))
+        self.assertNotIn("/**/", out)
+
+    def test_nested_comment_fragment_between_keywords(self):
+        nested = self._load("nested_comment_fragment")
+        out = nested.tamper("1 UNION SELECT 2")
+        self.assertIn("UNION", out)
+        self.assertIn("SELECT", out)
+        self.assertIn("/*", out)
 
     def test_new_encoders_are_terminal_and_incompatible(self):
         hex_literal = self._load("hex_string_literal")

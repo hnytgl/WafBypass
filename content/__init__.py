@@ -21,6 +21,7 @@ import lib.database
 import lib.firewall_found
 import lib.report
 import lib.tamper_engine
+import lib.adaptive
 
 
 class ScriptQueue(object):
@@ -267,6 +268,13 @@ def find_failures(html, regs):
 def get_working_tampers(url, norm_response, payloads, **kwargs):
     """
     gather working tamper scripts
+
+    In adaptive mode (default) the candidates are not tried in a fixed order:
+    a ``BlockSignature`` learns the target's block page and an
+    ``AdaptiveRanker`` re-orders the remaining candidates after every batch
+    based on observed bypasses / block signals, seeded with per-WAF family
+    hints. The scan stops once ``bypass_families`` distinct technique families
+    have confirmed a bypass (or when the candidate set is exhausted).
     """
     proxy = kwargs.get("proxy", None)
     agent = kwargs.get("agent", None)
@@ -281,6 +289,10 @@ def get_working_tampers(url, norm_response, payloads, **kwargs):
     tamper_variants = max(1, min(int(kwargs.get("tamper_variants", 1)), 5))
     tamper_seed = kwargs.get("tamper_seed", None)
     payload_type = kwargs.get("payload_type", "all")
+    adaptive_bypass = kwargs.get("adaptive_bypass", True)
+    bypass_families_target = max(1, int(kwargs.get("bypass_families", 3)))
+    detected_protections = kwargs.get("detected_protections", None)
+    adaptive_stats = kwargs.get("adaptive_stats", None)
 
     if req_timeout is None:
         lib.formatter.warn(
@@ -323,9 +335,32 @@ def get_working_tampers(url, norm_response, payloads, **kwargs):
         )
         max_successful_payloads = len(tampers)
 
+    # Deterministic candidate order when a seed is given so the adaptive
+    # ranking itself is reproducible across runs.
+    if tamper_seed is not None:
+        tampers = sorted(tampers, key=lib.tamper_engine.tamper_name)
+
+    block_sig = None
+    ranker = None
+    if adaptive_bypass:
+        block_sig = lib.adaptive.BlockSignature(norm_response)
+        ranker = lib.adaptive.AdaptiveRanker(
+            tampers,
+            seed=tamper_seed,
+            family_priorities=lib.adaptive.family_hints_for(detected_protections),
+        )
+
+    total_families = len({
+        family for candidate in tampers
+        for family in lib.adaptive.families_for(candidate)
+    })
+    if adaptive_stats is not None:
+        adaptive_stats.total_families = total_families
+
     working_tampers = set()
     _, normal_status, _, _ = norm_response
     good_tamper_paths = []
+    tried_candidates = set()
     total_tampers = len(tampers)
     total_payloads = len(payloads)
     total_requests = total_tampers * total_payloads * tamper_variants
@@ -335,39 +370,66 @@ def get_working_tampers(url, norm_response, payloads, **kwargs):
     ))
 
     tamper_idx = 0
-    for tamper in tampers:
-        tamper_idx += 1
-        load = tamper
-        tamper_name = lib.tamper_engine.tamper_name(load)
-
-        # Always show tamper progress
-        _progress = "[{}/{}]".format(tamper_idx, total_tampers)
-        lib.formatter.progress(_progress, tamper_name)
-
-        payload_idx = 0
-        for vector in payloads:
-            payload_idx += 1
-            for variant in range(tamper_variants):
-                try:
-                    tampered = lib.tamper_engine.apply_candidate(
-                        tamper, vector, seed=tamper_seed, variant=variant
+    while len(working_tampers) < max_successful_payloads:
+        if adaptive_bypass and ranker is not None:
+            confirmed = ranker.confirmed_families()
+            if len(confirmed) >= bypass_families_target:
+                lib.formatter.info(
+                    "adaptive early stop: {} family(ies) confirmed bypass: {}".format(
+                        len(confirmed), ", ".join(sorted(confirmed))
                     )
+                )
+                if adaptive_stats is not None:
+                    adaptive_stats.early_stopped = True
+                break
+            batch = ranker.order(batch_size=8)
+        else:
+            batch = [t for t in tampers if id(t) not in tried_candidates]
+        if not batch:
+            break
 
-                    # Smart URL assembly
-                    if "&" in tampered and "=" in tampered and "?" in url:
-                        payloaded_url = "{}&{}".format(url, tampered)
-                    elif "&" in tampered and "=" in tampered:
-                        payloaded_url = "{}?{}".format(url, tampered) if "?" not in url else "{}{}".format(url, tampered)
-                    else:
-                        payloaded_url = "{}{}".format(url, tampered)
+        for tamper in batch:
+            tamper_idx += 1
+            load = tamper
+            tamper_name = lib.tamper_engine.tamper_name(load)
 
-                    _, status, html, _ = lib.settings.get_page(
-                        payloaded_url, agent=agent, proxy=proxy, verbose=verbose, provided_headers=provided_headers,
-                        throttle=throttle, timeout=req_timeout
-                    )
+            # Always show tamper progress
+            _progress = "[{}/{}]".format(tamper_idx, total_tampers)
+            lib.formatter.progress(_progress, tamper_name)
 
-                    if not find_failures(str(html), failed_schema):
-                        if status and 200 <= status < 400:
+            candidate_bypassed = False
+            candidate_blocked = False
+            payload_idx = 0
+            for vector in payloads:
+                payload_idx += 1
+                for variant in range(tamper_variants):
+                    try:
+                        tampered = lib.tamper_engine.apply_candidate(
+                            tamper, vector, seed=tamper_seed, variant=variant
+                        )
+
+                        # Smart URL assembly
+                        if "&" in tampered and "=" in tampered and "?" in url:
+                            payloaded_url = "{}&{}".format(url, tampered)
+                        elif "&" in tampered and "=" in tampered:
+                            payloaded_url = "{}?{}".format(url, tampered) if "?" not in url else "{}{}".format(url, tampered)
+                        else:
+                            payloaded_url = "{}{}".format(url, tampered)
+
+                        _, status, html, _ = lib.settings.get_page(
+                            payloaded_url, agent=agent, proxy=proxy, verbose=verbose, provided_headers=provided_headers,
+                            throttle=throttle, timeout=req_timeout
+                        )
+
+                        if adaptive_bypass and block_sig is not None:
+                            verdict = block_sig.observe((None, status, html, None))
+                            blocked = verdict == "blocked"
+                            # "error" (transient network) and "redirect" are
+                            # not treated as block signals.
+                        else:
+                            blocked = find_failures(str(html), failed_schema)
+
+                        if not blocked and status and 200 <= status < 400:
                             try:
                                 if load not in good_tamper_paths:
                                     example = lib.tamper_engine.apply_candidate(
@@ -378,6 +440,7 @@ def get_working_tampers(url, norm_response, payloads, **kwargs):
                                     )
                                     working_tampers.add((tamper.__type__, example, load))
                                     good_tamper_paths.append(load)
+                                    candidate_bypassed = True
                                     lib.formatter.success("bypass found! tamper=[{}] variant=[{}] payload=[{}] status=[{}]".format(
                                         tamper_name, variant + 1, tampered[:60], status
                                     ))
@@ -387,30 +450,53 @@ def get_working_tampers(url, norm_response, payloads, **kwargs):
                                         "unable to record tamper result '{}': {}".format(tamper_name, error),
                                         minor=True,
                                     )
+                        else:
+                            if blocked or (status and not (200 <= status < 400)):
+                                candidate_blocked = True
 
-                    if verbose:
-                        _icon = "O" if status and 200 <= status < 400 else "X" if status in (403, 406) else "?"
-                        lib.formatter.debug("  payload {}/{} variant {}/{} [{}] status={} len={}".format(
-                            payload_idx, total_payloads, variant + 1, tamper_variants,
-                            _icon, status, len(str(html))
-                        ))
+                        if verbose:
+                            _icon = "O" if status and 200 <= status < 400 else "X" if status in (403, 406) else "?"
+                            lib.formatter.debug("  payload {}/{} variant {}/{} [{}] status={} len={}".format(
+                                payload_idx, total_payloads, variant + 1, tamper_variants,
+                                _icon, status, len(str(html))
+                            ))
 
-                    if load in good_tamper_paths or len(working_tampers) == max_successful_payloads:
-                        break
-                except RuntimeError:
-                    pass
-                except Exception as error:
-                    if verbose:
-                        lib.formatter.warn(
-                            "tamper '{}' variant {} failed: {}".format(
-                                tamper_name, variant + 1, error
-                            ),
-                            minor=True,
-                        )
+                        if load in good_tamper_paths or len(working_tampers) == max_successful_payloads:
+                            break
+                    except RuntimeError:
+                        pass
+                    except Exception as error:
+                        if verbose:
+                            lib.formatter.warn(
+                                "tamper '{}' variant {} failed: {}".format(
+                                    tamper_name, variant + 1, error
+                                ),
+                                minor=True,
+                            )
+                if len(working_tampers) == max_successful_payloads:
+                    break
+
+            tried_candidates.add(id(tamper))
+            if adaptive_bypass and ranker is not None:
+                if candidate_bypassed:
+                    outcome = "bypass"
+                elif candidate_blocked:
+                    outcome = "blocked"
+                else:
+                    outcome = "normal"
+                ranker.record(tamper, outcome, requests=payload_idx * tamper_variants)
+
+            if adaptive_stats is not None:
+                adaptive_stats.candidates_tried += 1
+                adaptive_stats.families_tried.update(lib.adaptive.families_for(tamper))
+                if adaptive_bypass and ranker is not None:
+                    adaptive_stats.families_bypassed.update(ranker.confirmed_families())
+                adaptive_stats.requests_made += payload_idx * tamper_variants
+
+            if adaptive_bypass and ranker is not None and len(ranker.confirmed_families()) >= bypass_families_target:
+                break
             if len(working_tampers) == max_successful_payloads:
                 break
-        if len(working_tampers) == max_successful_payloads:
-            break
 
     lib.formatter.info("bypass check complete: {}/{} working tampers found".format(
         len(working_tampers), total_tampers
@@ -449,7 +535,7 @@ def check_if_matched(normal_resp, payload_resp, step=1, verified=5):
         return None
 
 
-def dictify_output(url, firewalls, tampers):
+def dictify_output(url, firewalls, tampers, confidence=None, coverage=None, strategy=None):
     """
     send the output into a JSON format and return the JSON format
     """
@@ -474,6 +560,10 @@ def dictify_output(url, firewalls, tampers):
             retval["apparent working tampers"].append(to_append)
     else:
         retval["apparent working tampers"] = None
+
+    retval["confidence"] = confidence if confidence is not None else 0.0
+    retval["bypass coverage"] = coverage if coverage is not None else {}
+    retval["strategy summary"] = strategy if strategy is not None else ""
 
     jsonified = json.dumps(retval, indent=4, sort_keys=True)
     print("{}\n{}\n{}".format(data_sep, jsonified, data_sep))
@@ -513,6 +603,9 @@ def detection_main(url, payloads, cursor, **kwargs):
     tamper_seed = kwargs.get("tamper_seed", None)
     payload_type = kwargs.get("payload_type", "all")
     detection_depth = kwargs.get("detection_depth", "smart")
+    adaptive_bypass = kwargs.get("adaptive_bypass", True)
+    bypass_families = kwargs.get("bypass_families", 3)
+    adaptive_stats = lib.adaptive.AdaptiveStats()
 
     timeline = []
     def _add_timeline(event):
@@ -635,10 +728,6 @@ def detection_main(url, payloads, cursor, **kwargs):
     final_status_code = 0
     final_headers = {}
 
-    # plus one for lib.settings.get_page call (i honestly dont even know wtf this means LOL)
-    amount_of_products = 0
-    detected_protections = set()
-
     lib.formatter.info("loading firewall detection scripts")
     loaded_plugins = ScriptQueue(
         lib.settings.PLUGINS_DIRECTORY, lib.settings.PLUGINS_IMPORT_TEMPLATE, verbose=verbose
@@ -646,6 +735,9 @@ def detection_main(url, payloads, cursor, **kwargs):
 
     lib.formatter.info("running firewall detection checks")
     temp = []
+    match_counts = {}
+    match_statuses = {}
+    detected_protections = set()
     for item in responses:
         item = item if item is not None else normal_response
         _, status, html, headers = item
@@ -656,18 +748,28 @@ def detection_main(url, payloads, cursor, **kwargs):
                 if status is not None or headers is not None or html is not None:
                     if detection.detect(str(html), status=status, headers=headers) is True:
                         temp.append(detection.__product__)
+                        match_counts[detection.__product__] = match_counts.get(detection.__product__, 0) + 1
+                        match_statuses.setdefault(detection.__product__, set()).add(status)
                         if detection.__product__ == lib.settings.UNKNOWN_FIREWALL_NAME and len(temp) == 1 and status != 0:
                             lib.formatter.warn("unknown firewall detected saving fingerprint to log file")
                             path = lib.settings.create_fingerprint(url, html, status, headers)
                             return lib.firewall_found.request_firewall_issue_creation(path)
-                        else:
-                            detected_protections.add(detection.__product__)
             except Exception as e:
                 if verbose:
                     lib.formatter.warn("caught exception type: '{}' running module: {}".format(
                         e.__class__, detection
                     ))
                 pass
+
+    # False-positive reduction: a product is only reported when it matches on
+    # two or more probe responses, or when it is the sole product to match at
+    # all. The unknown-firewall placeholder is kept as-is.
+    for product, count in match_counts.items():
+        if product == lib.settings.UNKNOWN_FIREWALL_NAME or count >= 2 or len(match_counts) == 1:
+            detected_protections.add(product)
+    confidence = lib.adaptive.waf_confidence(match_counts, len(responses), match_statuses)
+
+    amount_of_products = 0
     if len(detected_protections) > 0:
         if lib.settings.UNKNOWN_FIREWALL_NAME not in detected_protections:
             amount_of_products += 1
@@ -691,12 +793,19 @@ def detection_main(url, payloads, cursor, **kwargs):
                 timeout=req_timeout, tamper_profile=tamper_profile,
                 tamper_chain_depth=tamper_chain_depth, tamper_chain_budget=tamper_chain_budget,
                 tamper_variants=tamper_variants, tamper_seed=tamper_seed,
-                payload_type=payload_type
+                payload_type=payload_type, adaptive_bypass=adaptive_bypass,
+                bypass_families=bypass_families, detected_protections=detected_protections,
+                adaptive_stats=adaptive_stats
             )
             if not formatted:
                 lib.settings.produce_results(found_working_tampers)
             else:
-                dict_data_output = dictify_output(url, detected_protections, found_working_tampers)
+                dict_data_output = dictify_output(
+                    url, detected_protections, found_working_tampers,
+                    confidence=confidence,
+                    coverage=adaptive_stats.to_dict(),
+                    strategy=lib.adaptive.build_strategy(adaptive_stats, confidence),
+                )
                 written_file_path = lib.settings.write_to_file(
                     filename, filepath, dict_data_output,
                     write_csv=use_csv, write_yaml=use_yaml, write_json=use_json,
@@ -710,7 +819,12 @@ def detection_main(url, payloads, cursor, **kwargs):
         else:
             lib.formatter.warn("skipping bypass analysis", minor=True)
             if formatted:
-                dict_data_output = dictify_output(url, detected_protections, [])
+                dict_data_output = dictify_output(
+                    url, detected_protections, [],
+                    confidence=confidence,
+                    coverage=adaptive_stats.to_dict(),
+                    strategy=lib.adaptive.build_strategy(adaptive_stats, confidence),
+                )
                 written_file_path = lib.settings.write_to_file(
                     filename, filepath, dict_data_output,
                     write_csv=use_csv, write_yaml=use_yaml, write_json=use_json,
@@ -774,7 +888,12 @@ def detection_main(url, payloads, cursor, **kwargs):
                     # for thirdparty information a chance to get the data out of the directory
                     # then they can easily parse it without problems.
                     lib.formatter.warn("forcing file creation without successful identification", minor=True)
-                    dict_data_output = dictify_output(url, None, [])
+                    dict_data_output = dictify_output(
+                        url, None, [],
+                        confidence=confidence,
+                        coverage=adaptive_stats.to_dict(),
+                        strategy=lib.adaptive.build_strategy(adaptive_stats, confidence),
+                    )
                     written_file_path = lib.settings.write_to_file(
                         filename, filepath, dict_data_output,
                         write_csv=use_csv, write_yaml=use_yaml, write_json=use_json,
@@ -806,12 +925,19 @@ def detection_main(url, payloads, cursor, **kwargs):
                 provided_headers=provided_headers, tamper_profile=tamper_profile,
                 tamper_chain_depth=tamper_chain_depth, tamper_chain_budget=tamper_chain_budget,
                 tamper_variants=tamper_variants, tamper_seed=tamper_seed,
-                payload_type=payload_type
+                payload_type=payload_type, adaptive_bypass=adaptive_bypass,
+                bypass_families=bypass_families, detected_protections=detected_protections,
+                adaptive_stats=adaptive_stats
             )
             if not formatted:
                 lib.settings.produce_results(found_working_tampers)
             else:
-                dict_data_output = dictify_output(url, detected_protections, found_working_tampers)
+                dict_data_output = dictify_output(
+                    url, detected_protections, found_working_tampers,
+                    confidence=confidence,
+                    coverage=adaptive_stats.to_dict(),
+                    strategy=lib.adaptive.build_strategy(adaptive_stats, confidence),
+                )
                 written_file_path = lib.settings.write_to_file(
                     filename, filepath, dict_data_output,
                     write_csv=use_csv, write_yaml=use_yaml, write_json=use_json,
@@ -825,7 +951,12 @@ def detection_main(url, payloads, cursor, **kwargs):
         else:
             lib.formatter.warn("skipping bypass analysis", minor=True)
             if formatted:
-                dict_data_output = dictify_output(url, detected_protections, [])
+                dict_data_output = dictify_output(
+                    url, detected_protections, [],
+                    confidence=confidence,
+                    coverage=adaptive_stats.to_dict(),
+                    strategy=lib.adaptive.build_strategy(adaptive_stats, confidence),
+                )
                 written_file_path = lib.settings.write_to_file(
                     filename, filepath, dict_data_output,
                     write_csv=use_csv, write_yaml=use_yaml, write_json=use_json,
@@ -841,7 +972,12 @@ def detection_main(url, payloads, cursor, **kwargs):
         _, final_status_code, _, final_headers = normal_response
         report_path = lib.report.save_html_report(
             url, detected_protections, found_working_tampers, final_headers,
-            final_status_code, found_webserver, len(payloads), request_type, timeline
+            final_status_code, found_webserver, len(payloads), request_type, timeline,
+            intel={
+                "confidence": confidence,
+                "coverage": adaptive_stats.to_dict(),
+                "strategy": lib.adaptive.build_strategy(adaptive_stats, confidence),
+            }
         )
         if report_path:
             lib.formatter.success("HTML report saved to: {}".format(report_path))

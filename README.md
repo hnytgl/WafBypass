@@ -2,7 +2,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-green.svg)](https://www.python.org/)
-[![Version 2.5.0](https://img.shields.io/badge/version-2.5.0-orange.svg)](https://github.com/hnytgl/WafBypass)
+[![Version 3.0.0](https://img.shields.io/badge/version-3.0.0-orange.svg)](https://github.com/hnytgl/WafBypass)
 [![CI](https://github.com/hnytgl/WafBypass/actions/workflows/ci.yml/badge.svg)](https://github.com/hnytgl/WafBypass/actions/workflows/ci.yml)
 
 > 攻击即防御 —— 了解你的敌人，理解你的目标
@@ -13,9 +13,18 @@
 
 ---
 
-## 当前版本：v2.5.0
+## 当前版本：v3.0.0
 
-本次更新重点扩充了绕过脚本库与组合档案，新增 SQL 运算符/字面量混淆、JS 代码混淆、命令注入与路径穿越混淆等现代绕过技术。
+**v3.0.0 是自适应智能引擎大版本升级**，核心绕过循环从"静态随机试错"进化为"从响应中学习"的自适应引擎，并新增智能检测置信度、智能报告分析与 4 个新绕过脚本。
+
+### v3.0.0 更新内容
+
+- **自适应绕过引擎**：自学习阻断签名（自动识别目标 WAF 的拦截页特征，不再依赖硬编码正则）、Tamper 自适应重排序（根据每个脚本的实时反馈动态调整优先级）、按 WAF 产品优先选择绕过家族、智能早停（凑够多个不同绕过家族即停止，节省请求）
+- **智能检测增强**：WAF 识别置信度评分（0-100%）、降误报（需 ≥2 个探针命中或唯一命中才判定）
+- **智能报告分析**：JSON/YAML/HTML 报告新增 `confidence`、`bypass coverage`（家族覆盖率）、`strategy summary`（策略摘要）；HTML 报告新增 Intelligence 分析章节
+- **新增 4 个绕过脚本**，总计 **81 个**：全角 Unicode 混淆、十六进制大小写随机化、换行拆分、嵌套注释分片
+- 新增 `--adaptive/--no-adaptive`、`--bypass-families` 参数
+- 新增 **27 项测试**，全部 **56 项**测试通过
 
 ### v2.5.0 更新内容
 
@@ -58,7 +67,7 @@ wafbypass -u "https://lab.example/?id=1" --payload-type sqli \
 
 ## 目录
 
-- [当前版本：v2.5.0](#当前版本v250)
+- [当前版本：v3.0.0](#当前版本v300)
 - [功能特性](#功能特性)
 - [可检测的防火墙](#可检测的防火墙)
 - [可用的绕过脚本](#可用的绕过脚本)
@@ -76,7 +85,8 @@ wafbypass -u "https://lab.example/?id=1" --payload-type sqli \
 ## 功能特性
 
 - **WAF检测**：支持检测 **112+** 种Web应用防火墙和防护系统
-- **自动绕过**：内置 **77** 种绕过脚本（Tamper Scripts），支持受预算约束的 2–3 层组合链
+- **自动绕过**：内置 **81** 种绕过脚本（Tamper Scripts），支持受预算约束的 2–3 层组合链
+- **自适应智能引擎**：自学习阻断特征、Tamper 自适应排序、按 WAF 产品优先选择绕过家族、家族多样性早停
 - **多种输入方式**：支持单URL、批量URL列表、Burp Suite导出文件、Googler JSON文件
 - **多种输出格式**：支持 JSON、YAML、CSV 格式化输出
 - **数据库缓存**：自动缓存检测结果，避免重复扫描
@@ -115,14 +125,14 @@ wafbypass --wafs
 
 ## 可用的绕过脚本
 
-WAFBypass 内置 **77** 种绕过脚本，涵盖以下技术：
+WAFBypass 内置 **81** 种绕过脚本，涵盖以下技术：
 
 | 类型 | 脚本示例 |
 |------|---------|
-| **编码转换** | URL编码、双重/三重URL编码、Base64编码、Hex编码、HTML实体(十六进制/十进制)、Unicode转义、%20百分号编码 |
-| **字符混淆** | 大小写随机变换、Unicode规范化、UTF-8过长编码、逆序编码、`\uXXXX` 转义 |
-| **空白字符** | 空格替换(Tab/Comment/+/NULL/%20)、随机空白字符、Chunked传输编码 |
-| **SQL绕过** | SQL注释混淆、双SQL注释、运算符混淆(`=`→`BETWEEN`/`LIKE`、`AND`→`&&`)、字符串字面量`0x`/`CHAR()`/`UNHEX()`编码、科学计数法、数值操作转换、关键字拆分、参数碎片化 |
+| **编码转换** | URL编码、双重/三重URL编码、Base64编码、Hex编码、HTML实体(十六进制/十进制)、Unicode转义、%20百分号编码、十六进制大小写随机化 |
+| **字符混淆** | 大小写随机变换、Unicode规范化、全角Unicode混淆、UTF-8过长编码、逆序编码、`\uXXXX` 转义 |
+| **空白字符** | 空格替换(Tab/Comment/+/NULL/%20)、随机空白字符、换行拆分、Chunked传输编码 |
+| **SQL绕过** | SQL注释混淆、双SQL注释、嵌套注释分片、运算符混淆(`=`→`BETWEEN`/`LIKE`、`AND`→`&&`)、字符串字面量`0x`/`CHAR()`/`UNHEX()`编码、科学计数法、数值操作转换、关键字拆分、参数碎片化 |
 | **XSS绕过** | HTML注释混淆、XSS向量变异、JavaScript混淆(`\x`转义/`fromCharCode`/换行拆分)、标签内空白注入、Script标签拆分 |
 | **HTTP层面** | HTTP参数污染(HPP)、CRLF注入、方法篡改、Content-Type操控 |
 | **Payload分片** | 智能参数分片、HPP多策略、Multipart表单分片、SQL注释分片、管道化请求、NULL字节分片、编码链分片 |
@@ -313,6 +323,8 @@ python wafbypass -u https://example.com/ --traffic traffic.log
 | `--tamper-chain-budget INT` | 自动生成的组合候选上限（默认24） |
 | `--tamper-variants 1-5` | 随机型脚本的变体尝试次数 |
 | `--tamper-seed INT` | 固定随机种子，便于复现实验 |
+| `--adaptive` / `--no-adaptive` | 启用/禁用自适应绕过排序与家族多样性早停（默认开启） |
+| `--bypass-families INT` | 自适应分析确认多少个不同绕过家族后提前停止（默认3） |
 
 ### 输出参数
 
@@ -486,7 +498,9 @@ A: 在 `content/tampers/` 目录下创建新的Python文件，遵循现有的脚
 
 升级内容包括：
 - 新增 26 个WAF检测插件（AWS v2, Azure, GCP, Tencent, Huawei, 奇安信, 山石, 安恒, 启明, 天融信, 火山引擎等），总计112+
-- 新增绕过脚本与受预算约束的组合链引擎，总计77个脚本
+- 新增绕过脚本与受预算约束的组合链引擎，总计81个脚本
+- 自适应智能引擎（自学习阻断签名、Tamper 自适应排序、WAF 家族提示、多样性早停）
+- 智能检测置信度评分与智能报告分析
 - Payload分片绕过技术套件（7项分片策略）
 - HTML专业报告生成（`--html-report`）
 - 6类Payload分类库（SQLi/XSS/XXE/SSTI/LFI/CMDi）

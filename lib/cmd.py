@@ -163,6 +163,28 @@ class WAFBypassParser(ArgumentParser):
             dest="tamperSeed",
             help="Seed randomized tampers for reproducible authorized tests",
         )
+        encoding_opts.add_argument(
+            "--adaptive",
+            action="store_true",
+            default=True,
+            dest="adaptiveBypass",
+            help="Enable adaptive bypass ranking with family-diversity early stop "
+                 "(*default=on)",
+        )
+        encoding_opts.add_argument(
+            "--no-adaptive",
+            action="store_false",
+            dest="adaptiveBypass",
+            help="Disable adaptive ranking and fall back to the static shuffle loop",
+        )
+        encoding_opts.add_argument(
+            "--bypass-families",
+            type=int,
+            default=3,
+            dest="bypassFamilies",
+            help="Stop adaptive bypass analysis once this many distinct technique "
+                 "families confirm a bypass (*default=3)",
+        )
 
         output_opts = parser.add_argument_group("output options",
                                                 "arguments that control how WAFBypass handles output")

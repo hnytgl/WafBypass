@@ -327,6 +327,8 @@ def main():
             opt.tamperChainBudget = detection_config.get("tamper_chain_budget", opt.tamperChainBudget)
             opt.tamperVariants = detection_config.get("tamper_variants", opt.tamperVariants)
             opt.tamperSeed = detection_config.get("tamper_seed", opt.tamperSeed)
+            opt.adaptiveBypass = detection_config.get("adaptive_bypass", opt.adaptiveBypass)
+            opt.bypassFamilies = detection_config.get("bypass_families", opt.bypassFamilies)
             info("loaded configuration from '{}'".format(opt.configFile))
         except ImportError:
             warn("YAML library not available, config file ignored. Install: pip install pyyaml")
@@ -435,6 +437,7 @@ def main():
                 tamper_profile=opt.tamperProfile, tamper_chain_depth=opt.tamperChainDepth,
                 tamper_chain_budget=opt.tamperChainBudget, tamper_variants=opt.tamperVariants,
                 tamper_seed=opt.tamperSeed, payload_type=opt.payloadType,
+                adaptive_bypass=opt.adaptiveBypass, bypass_families=opt.bypassFamilies,
                 detection_depth=opt.detectionDepth
             )
         elif any(o is not None for o in [opt.runMultipleWebsites, opt.burpRequestFile]):
@@ -511,6 +514,7 @@ def main():
                     tamper_profile=opt.tamperProfile, tamper_chain_depth=opt.tamperChainDepth,
                     tamper_chain_budget=opt.tamperChainBudget, tamper_variants=opt.tamperVariants,
                     tamper_seed=opt.tamperSeed, payload_type=opt.payloadType,
+                    adaptive_bypass=opt.adaptiveBypass, bypass_families=opt.bypassFamilies,
                     detection_depth=opt.detectionDepth
                 )
                 time.sleep(0.5)
@@ -568,6 +572,7 @@ def main():
                             tamper_profile=opt.tamperProfile, tamper_chain_depth=opt.tamperChainDepth,
                             tamper_chain_budget=opt.tamperChainBudget, tamper_variants=opt.tamperVariants,
                             tamper_seed=opt.tamperSeed, payload_type=opt.payloadType,
+                            adaptive_bypass=opt.adaptiveBypass, bypass_families=opt.bypassFamilies,
                             detection_depth=opt.detectionDepth
                         )
                         time.sleep(0.5)

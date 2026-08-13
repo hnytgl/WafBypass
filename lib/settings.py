@@ -26,7 +26,7 @@ except:
     pass
 
 # version number <major>.<minor>.<patch>
-VERSION = "2.5.0"
+VERSION = "3.0.0"
 TLS_VERIFY = True
 
 # version string
