@@ -375,7 +375,7 @@ python wafbypass -u https://example.com/ --traffic traffic.log
 $ python wafbypass -u https://example.com/?id=1
 
 [10:30:15][INFO] checking for updates
-[10:30:16][INFO] using User-Agent 'wafbypass/2.0.0'
+[10:30:16][INFO] using User-Agent 'wafbypass/3.0.0'
 [10:30:16][INFO] using default payloads
 [10:30:17][INFO] request type: GET
 [10:30:17][INFO] gathering HTTP responses
