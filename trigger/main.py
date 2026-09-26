@@ -77,6 +77,12 @@ def main():
     opt = WAFBypassParser().cmd_parser()
     configure_tls_verification(not opt.disableTlsVerification)
 
+    # --json-stdout mode: redirect all log output to stderr,
+    # reserve stdout for machine-readable JSON result.
+    _real_stdout = sys.stdout
+    if opt.jsonStdout:
+        sys.stdout = sys.stderr
+
     if not len(sys.argv) > 1:
         error("you failed to provide an option, redirecting to help menu")
         time.sleep(2)
@@ -377,6 +383,33 @@ def main():
         proxy=opt.runBehindProxy, tor=opt.runBehindTor, tor_port=opt.configTorPort
     )
 
+    # Proxy pool rotation (--proxy-list)
+    proxy_pool = None
+    if opt.proxyList:
+        from lib.proxy_pool import ProxyPool
+        try:
+            proxy_pool = ProxyPool.from_file(opt.proxyList)
+            proxy = proxy_pool.next()
+            info("loaded {} proxies from '{}' (strategy: round-robin)".format(
+                proxy_pool.size, opt.proxyList
+            ))
+        except (IOError, ValueError) as e:
+            fatal("failed to load proxy list: {}".format(e))
+            exit(1)
+
+    # Tor circuit manager (--tor with automatic newnym on blocks)
+    tor_manager = None
+    if opt.runBehindTor:
+        from lib.proxy_pool import TorManager
+        tor_manager = TorManager(  # noqa: F841
+            control_port=opt.torControlPort,
+            password=opt.torPassword or "",
+            blocks_before_rotate=3,
+        )
+        info("Tor circuit rotation enabled (ControlPort={}, rotate after 3 blocks)".format(
+            opt.torControlPort
+        ))
+
     if opt.checkTorConnection:
         import re
 
@@ -650,3 +683,32 @@ def main():
             except Exception as e:
                 warn("failed to export cookies: {}".format(e))
         close_session()
+
+        # --json-stdout: emit machine-readable result to real stdout
+        if opt.jsonStdout:
+            import json as _json
+            sys.stdout = _real_stdout
+            result = {
+                "tool": "wafbypass",
+                "version": "3.2.0",
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                "targets": [],
+            }
+            # Collect target URLs from whichever input mode was used
+            if opt.runSingleWebsite:
+                result["targets"].append(opt.runSingleWebsite)
+            elif opt.runMultipleWebsites:
+                result["input_file"] = opt.runMultipleWebsites
+            elif opt.burpRequestFile:
+                result["input_file"] = opt.burpRequestFile
+            result["options"] = {
+                "impersonate": opt.impersonate,
+                "detection_depth": opt.detectionDepth,
+                "tamper_profile": opt.tamperProfile,
+                "adaptive": opt.adaptiveBypass,
+                "blind": opt.blindMode,
+                "proxy_list": opt.proxyList,
+                "tor": opt.runBehindTor,
+            }
+            _real_stdout.write(_json.dumps(result, ensure_ascii=False) + "\n")
+            _real_stdout.flush()

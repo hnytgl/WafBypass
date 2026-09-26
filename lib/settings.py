@@ -182,6 +182,89 @@ class InvalidURLProvided(Exception):
     pass
 
 
+class _JsonResponseWrapper:
+    """
+    Lightweight wrapper for JSON/API responses that preserves the raw text
+    for str() calls (used by block detection) while also providing .json()
+    for structured access. Avoids BeautifulSoup HTML parsing which would
+    destroy JSON structure.
+    """
+
+    def __init__(self, text):
+        self._text = text
+        self._parsed = None
+
+    def __str__(self):
+        return self._text
+
+    def __len__(self):
+        return len(self._text)
+
+    def __bool__(self):
+        return bool(self._text)
+
+    def json(self):
+        """Parse and return the JSON data (cached)."""
+        if self._parsed is None:
+            try:
+                self._parsed = json.loads(self._text)
+            except (json.JSONDecodeError, ValueError):
+                self._parsed = {}
+        return self._parsed
+
+    def get_text(self):
+        return self._text
+
+
+# JSON block markers: keys/values in JSON responses that indicate a WAF block
+_JSON_BLOCK_KEYS = ("error", "message", "detail", "reason", "description")
+_JSON_BLOCK_PATTERNS = (
+    re.compile(r"\bblocked\b", re.I),
+    re.compile(r"\bforbidden\b", re.I),
+    re.compile(r"\bdenied\b", re.I),
+    re.compile(r"access.denied", re.I),
+    re.compile(r"\bwaf\b", re.I),
+    re.compile(r"firewall", re.I),
+    re.compile(r"not.acceptable", re.I),
+    re.compile(r"request.rejected", re.I),
+    re.compile(r"illegal", re.I),
+    re.compile(r"malicious", re.I),
+)
+
+
+def is_json_block(response_text):
+    """
+    Check if a JSON response body indicates a WAF block.
+    Returns True if block markers are found in common error fields.
+    """
+    if not response_text:
+        return False
+    try:
+        data = json.loads(response_text) if isinstance(response_text, str) else response_text
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return False
+
+    if not isinstance(data, dict):
+        return False
+
+    # Check common error/message fields
+    for key in _JSON_BLOCK_KEYS:
+        value = data.get(key)
+        if isinstance(value, str):
+            for pattern in _JSON_BLOCK_PATTERNS:
+                if pattern.search(value):
+                    return True
+        elif isinstance(value, dict):
+            # Nested error objects: {"error": {"message": "blocked by WAF"}}
+            for nested_key in ("message", "detail", "reason", "text"):
+                nested = value.get(nested_key)
+                if isinstance(nested, str):
+                    for pattern in _JSON_BLOCK_PATTERNS:
+                        if pattern.search(nested):
+                            return True
+    return False
+
+
 class HTTP_HEADER:
     """
     HTTP request headers list, putting it in a class because
@@ -374,8 +457,21 @@ def get_page(url, **kwargs):
             _LAST_ELAPSED_MS = int(elapsed.total_seconds() * 1000) if elapsed and hasattr(elapsed, "total_seconds") else 0
         except (TypeError, AttributeError):
             _LAST_ELAPSED_MS = 0
-        soup = BeautifulSoup(resp.content, "html.parser")
-        return "{} {}".format(request_method, get_query(url)), resp.status_code, soup, resp.headers
+
+        # Content-Type sniffing: JSON/API responses get raw text instead of
+        # BeautifulSoup HTML parsing, which would destroy structure.
+        content_type = ""
+        if hasattr(resp, "headers") and resp.headers:
+            content_type = str(resp.headers.get("Content-Type", "") or "").lower()
+
+        if "json" in content_type or "graphql" in content_type:
+            # For JSON responses, return raw text as a lightweight wrapper
+            # that str() will produce the original JSON string.
+            parsed = _JsonResponseWrapper(resp.text)
+        else:
+            parsed = BeautifulSoup(resp.content, "html.parser")
+
+        return "{} {}".format(request_method, get_query(url)), resp.status_code, parsed, resp.headers
     except (requests.exceptions.Timeout, requests.exceptions.ConnectionError,
             requests.exceptions.TooManyRedirects, requests.exceptions.SSLError,
             requests.exceptions.ChunkedEncodingError):

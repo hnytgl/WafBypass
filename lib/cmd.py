@@ -297,6 +297,17 @@ class WAFBypassParser(ArgumentParser):
                                "to infer WAF processing (e.g. audit logging, deep inspection)")
         misc.add_argument("--blind-threshold", dest="blindThreshold", metavar="MS", type=int, default=3000,
                           help="Response time delta (ms) to consider a blind hit (default=3000)")
+        misc.add_argument("--proxy-list", dest="proxyList", metavar="FILE",
+                          help="Load proxies from a text file (one per line) for rotation. "
+                               "Auto-removes proxies after 3 consecutive failures.")
+        misc.add_argument("--tor-control-port", dest="torControlPort", type=int, default=9051,
+                          help="Tor ControlPort for NEWNYM circuit rotation (default=9051)")
+        misc.add_argument("--tor-password", dest="torPassword", default="",
+                          help="Tor ControlPort authentication password")
+        misc.add_argument("--json-stdout", dest="jsonStdout", action="store_true", default=False,
+                          help="Output scan results as single-line JSON to stdout "
+                               "(logs go to stderr). Enables pipeline integration: "
+                               "wafbypass -u X --json-stdout | jq .is_protected")
 
         hidden = parser.add_argument_group()
         hidden.add_argument("--clean", action="store_true", dest="cleanHomeFolder", help=SUPPRESS)
