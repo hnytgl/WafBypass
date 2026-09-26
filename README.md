@@ -2,7 +2,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-green.svg)](https://www.python.org/)
-[![Version 3.2.0](https://img.shields.io/badge/version-3.2.0-orange.svg)](https://github.com/hnytgl/WafBypass)
+[![Version 3.3.0](https://img.shields.io/badge/version-3.3.0-orange.svg)](https://github.com/hnytgl/WafBypass)
 [![CI](https://github.com/hnytgl/WafBypass/actions/workflows/ci.yml/badge.svg)](https://github.com/hnytgl/WafBypass/actions/workflows/ci.yml)
 
 > 攻击即防御 —— 了解你的敌人，理解你的目标
@@ -13,19 +13,20 @@
 
 ---
 
-## 当前版本：v3.2.0
+## 当前版本：v3.3.0
 
-**v3.2.0 是安全加固与 TLS 指纹伪装版本**，修复了多项安全漏洞和性能瓶颈，并新增了浏览器级 TLS 指纹伪装能力。
+**v3.3.0 是代理池、API 目标支持与管道集成版本**，新增代理轮换、Tor circuit 自动刷新、JSON/API 目标检测和机器可读输出。
 
-### v3.2.0 更新内容
+### v3.3.0 更新内容
 
-- **TLS 指纹伪装**：新增 `--impersonate` 参数，通过 curl_cffi 后端模拟 Chrome/Safari/Firefox/Edge 的 TLS 指纹（JA3/JA4），绕过 Cloudflare、Akamai、DataDome 等在 TLS 握手层的拦截
-- **客户端指纹自检**：新增 `--tls-fingerprint` 参数，连接 tls.peet.ws 输出自身 JA3/JA4/HTTP2 指纹，诊断"payload 无效"还是"TLS 层已被标记"
-- **Cookie Jar 支持**：新增 `--cookie-jar` / `--export-cookies` 参数，支持导入浏览器已获取的 cf_clearance / aws-waf-token，跳过 JS Challenge
-- **安全修复**：消除 `yaml.load()` RCE 向量、移除 banner 动态导入 tamper 的本地提权路径、修复 SessionManager 硬编码 `verify=False`
-- **性能提升**：启用 `requests.Session` 连接池 + cookie 持久化（多 payload 扫描提速 3-10×）、缓存 user-agent 列表（消除每请求 392KB 磁盘读）、`check_version` 加 3s 超时 + 24h 本地缓存
-- **健壮性**：Windows ANSI 颜色支持、非 TTY 自动禁用颜色、broaden 异常捕获、移除 Python 2 兼容垫片、`--no-update-check` 跳过启动版本检查
-- **CI 增强**：新增 ruff lint + bandit + pip-audit 安全扫描 job，matrix 补全 Python 3.10/3.11
+- **代理池轮换**：`--proxy-list` 从文件加载代理列表，round-robin/random 策略，连续 3 次失败自动剔除，池耗尽自动重置
+- **Tor circuit 管理**：连续 N 次 block 后自动发送 NEWNYM 信号切换出口 IP（`--tor-control-port` / `--tor-password`）
+- **Rate-limit 与 block 分离**：429 不再被当作 WAF rule block，AdaptiveRanker 不再错误惩罚 tamper family；解析 `Retry-After` + AIMD 指数退避
+- **Challenge 页面识别**：检测 Cloudflare JS/Turnstile、DataDome、AWS WAF、PerimeterX、Kasada、HUMAN Security 的 challenge 页面，提示用户使用 `--cookie-jar` 或 `--impersonate`
+- **JSON/API 目标支持**：Content-Type 嗅探，JSON/GraphQL 响应跳过 HTML 解析，`is_json_block()` 检测 JSON 中的 WAF 拦截标记
+- **机器可读 stdout**：`--json-stdout` 将日志重定向到 stderr，stdout 输出单行 JSON，支持 `| jq` 管道集成
+- **响应时间分析**：`get_page()` 记录 elapsed_ms，`--blind` / `--blind-threshold` 为 time-based 盲测打基础
+- **`--max-rps`**：全局速率上限控制
 - 全部 **59 项**测试通过（ubuntu + windows × Python 3.9-3.13）
 
 ### v3.0.0 更新内容
@@ -78,7 +79,7 @@ wafbypass -u "https://lab.example/?id=1" --payload-type sqli \
 
 ## 目录
 
-- [当前版本：v3.2.0](#当前版本v320)
+- [当前版本：v3.3.0](#当前版本v330)
 - [功能特性](#功能特性)
 - [可检测的防火墙](#可检测的防火墙)
 - [可用的绕过脚本](#可用的绕过脚本)
