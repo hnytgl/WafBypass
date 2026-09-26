@@ -29,6 +29,23 @@
 - **`--max-rps`**：全局速率上限控制
 - 全部 **59 项**测试通过（ubuntu + windows × Python 3.9-3.13）
 
+### v3.2.0 更新内容
+
+- **TLS 指纹伪装**：新增 `--impersonate` 参数，通过 curl_cffi 后端模拟 Chrome/Safari/Firefox/Edge 的 TLS 指纹（JA3/JA4），绕过 Cloudflare、Akamai、DataDome 等在 TLS 握手层的拦截
+- **客户端指纹自检**：新增 `--tls-fingerprint` 参数，连接 tls.peet.ws 输出自身 JA3/JA4/HTTP2 指纹，诊断"payload 无效"还是"TLS 层已被标记"
+- **Cookie Jar 支持**：新增 `--cookie-jar` / `--export-cookies` 参数，支持导入浏览器已获取的 cf_clearance / aws-waf-token，跳过 JS Challenge
+- **安全修复**：消除 `yaml.load()` RCE 向量、移除 banner 动态导入 tamper 的本地提权路径、修复 SessionManager 硬编码 `verify=False`
+- **性能提升**：启用 `requests.Session` 连接池 + cookie 持久化（多 payload 扫描提速 3-10×）、缓存 user-agent 列表（消除每请求 392KB 磁盘读）、`check_version` 加 3s 超时 + 24h 本地缓存
+- **健壮性**：Windows ANSI 颜色支持、非 TTY 自动禁用颜色、broaden 异常捕获、移除 Python 2 兼容垫片、`--no-update-check` 跳过启动版本检查
+- **CI 增强**：新增 ruff lint + bandit + pip-audit 安全扫描 job，matrix 补全 Python 3.10/3.11
+
+### v3.1.0 更新内容
+
+- **稳定的可复现排名**：固定随机种子后，重复排序不再因内部随机状态消耗而改变候选顺序
+- **组合链感知评分**：Tamper Chain 继承各组件的 WAF 家族提示、阶段权重和历史反馈
+- **Unicode 阻断页识别**：支持中文等非拉丁文本的 Unicode 分词与大小写折叠
+- 新增 3 项回归测试，全部 **59 项**测试通过
+
 ### v3.0.0 更新内容
 
 - **自适应绕过引擎**：自学习阻断签名（自动识别目标 WAF 的拦截页特征，不再依赖硬编码正则）、Tamper 自适应重排序（根据每个脚本的实时反馈动态调整优先级）、按 WAF 产品优先选择绕过家族、智能早停（凑够多个不同绕过家族即停止，节省请求）
