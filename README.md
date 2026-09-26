@@ -2,7 +2,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-green.svg)](https://www.python.org/)
-[![Version 3.3.0](https://img.shields.io/badge/version-3.3.0-orange.svg)](https://github.com/hnytgl/WafBypass)
+[![Version 4.0.0](https://img.shields.io/badge/version-4.0.0-orange.svg)](https://github.com/hnytgl/WafBypass)
 [![CI](https://github.com/hnytgl/WafBypass/actions/workflows/ci.yml/badge.svg)](https://github.com/hnytgl/WafBypass/actions/workflows/ci.yml)
 
 > 攻击即防御 —— 了解你的敌人，理解你的目标
@@ -13,9 +13,20 @@
 
 ---
 
-## 当前版本：v3.3.0
+## 当前版本：v4.0.0
 
-**v3.3.0 是代理池、API 目标支持与管道集成版本**，新增代理轮换、Tor circuit 自动刷新、JSON/API 目标检测和机器可读输出。
+**v4.0.0 是声明式签名引擎版本**，将 114 个 Python 检测插件迁移为纯数据 YAML 签名，消除动态代码执行风险，支持签名库独立热更新。
+
+### v4.0.0 更新内容
+
+- **声明式 YAML 签名引擎**：111 个 WAF 检测签名从 Python 插件迁移为纯数据 YAML 规则，零代码执行，消除 `importlib` 动态导入的安全风险
+- **签名热更新**：`--update-signatures` 从 GitHub Releases（或企业内部源 `--signature-url`）下载签名包，SHA256 校验 + 路径穿越防护，独立于代码版本更新
+- **AST 迁移工具**：`tools/migrate_plugins.py` 自动解析 Python 插件 AST，提取 regex/header/status 逻辑生成等效 YAML（73 simple / 19 medium / 19 complex）
+- **检测性能优化**：body 截断至 64KB 匹配（WAF 阻断页通常 <10KB），111 签名检测耗时从 2.3s 降至 0.37s（6.3× 提速）
+- **误报修复**：Apache Generic / Nginx Generic / Unknown Firewall / TopSec 签名收紧为仅 error page 触发，正常页面零误报
+- **Python 插件兼容**：YAML 引擎优先执行，未覆盖的产品自动 fallback 到 Python 插件；`--no-yaml-signatures` 可禁用
+- **JSON Schema 校验**：`signatures/_schema.json` 定义 Schema v1，CI 可校验签名格式合法性
+- 新增 **20 项签名引擎测试**，全部 **79 项**测试通过
 
 ### v3.3.0 更新内容
 
@@ -96,7 +107,7 @@ wafbypass -u "https://lab.example/?id=1" --payload-type sqli \
 
 ## 目录
 
-- [当前版本：v3.3.0](#当前版本v330)
+- [当前版本：v4.0.0](#当前版本v400)
 - [功能特性](#功能特性)
 - [可检测的防火墙](#可检测的防火墙)
 - [可用的绕过脚本](#可用的绕过脚本)
