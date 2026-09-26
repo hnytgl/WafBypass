@@ -6,12 +6,7 @@ import time
 import random
 import string
 import platform
-import warnings
-try:
-    import urlparse
-except ImportError:
-    # python 2.x doesn't have a ModuleNotFoundError so we'll just catch the exception I guess
-    import urllib.parse as urlparse
+import urllib.parse as urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -21,9 +16,8 @@ import lib.database
 
 try:
     import yaml
-    warnings.simplefilter("ignore", yaml.YAMLLoadWarning)
-except:
-    pass
+except ImportError:
+    yaml = None
 
 # version number <major>.<minor>.<patch>
 VERSION = "3.1.0"
@@ -89,6 +83,10 @@ try:
 except OSError:
     TAMPERS_DIRECTORY = "{}/tampers".format(HOME)
 
+# flag: True when tamper/plugin directory fell back to user-writable ~/.wafbypass/
+_USING_FALLBACK_TAMPERS = TAMPERS_DIRECTORY.startswith(HOME)
+_USING_FALLBACK_PLUGINS = PLUGINS_DIRECTORY.startswith(HOME)
+
 # name provided to unknown firewalls
 UNKNOWN_FIREWALL_NAME = "Unknown Firewall"
 
@@ -132,6 +130,12 @@ DEFAULT_USER_AGENT = "wafbypass/{} (Language={}; Platform={})".format(
     VERSION, sys.version.split(" ")[0], platform.platform().split("-")[0]
 )
 
+# module-level cache for user agents (loaded once on first use)
+_AGENT_CACHE = None
+
+# module-level shared HTTP session (connection pooling + cookie jar)
+_SESSION = None
+
 # arguments that need to be blocked from issue creations and waf creations
 SENSITIVE_ARGUMENTS = ("--proxy", "-u", "--url", "-D", "--data", "--pa", "-b", "--burp")
 
@@ -141,7 +145,8 @@ SENSITIVE_ARGUMENTS = ("--proxy", "-u", "--url", "-D", "--data", "--pa", "-b", "
 # the WAF is, along with the information we will need
 # to identify what tampering method we should use
 # they are located in ./content/files/default_payloads.lst
-WAF_REQUEST_DETECTION_PAYLOADS = [p.strip() for p in open(DEFAULT_PAYLOAD_PATH).readlines()]
+with open(DEFAULT_PAYLOAD_PATH) as _f:
+    WAF_REQUEST_DETECTION_PAYLOADS = [p.strip() for p in _f.readlines() if p.strip()]
 
 # random home pages to try and get cookies
 RAND_HOMEPAGES = (
@@ -241,11 +246,40 @@ def get_query(url):
     return query
 
 
+def _get_session():
+    """
+    return a module-level requests.Session for connection pooling,
+    keep-alive and cookie persistence (e.g. Cloudflare cf_clearance).
+    Created lazily on first use.
+    """
+    global _SESSION
+    if _SESSION is None:
+        _SESSION = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=10,
+            pool_maxsize=20,
+            max_retries=0,
+            pool_block=False
+        )
+        _SESSION.mount("http://", adapter)
+        _SESSION.mount("https://", adapter)
+    return _SESSION
+
+
+def close_session():
+    """explicitly close the shared session (useful for tests / cleanup)"""
+    global _SESSION
+    if _SESSION is not None:
+        _SESSION.close()
+        _SESSION = None
+
+
 def get_page(url, **kwargs):
     """
     get the website page, this will return a `tuple`
     containing the status code, HTML and headers of the
-    requests page
+    requests page. Uses a shared Session for connection
+    pooling and cookie persistence.
     """
     proxy = kwargs.get("proxy", None)
     agent = kwargs.get("agent", DEFAULT_USER_AGENT)
@@ -264,28 +298,26 @@ def get_page(url, **kwargs):
 
         post_data = ''.join(items)
 
-    if request_method == "POST":
-        req = requests.post
-    else:
-        req = requests.get
-
     if provided_headers is None:
-        headers = {"Connection": "close", "User-Agent": agent}
+        headers = {"User-Agent": agent}
     else:
         headers = {}
-        if type(provided_headers) == dict:
+        if isinstance(provided_headers, dict):
             for key, value in provided_headers.items():
                 headers[key] = value
             headers["User-Agent"] = agent
         else:
-            headers = provided_headers
+            headers = dict(provided_headers)
             headers["User-Agent"] = agent
     proxies = {} if proxy is None else {"http": proxy, "https": proxy}
     error_retval = ("", 0, "", {})
 
     # throttle the requests from here
-    time.sleep(throttle)
+    if throttle:
+        time.sleep(throttle)
 
+    session = _get_session()
+    resp = None
     try:
         request_kwargs = {
             "headers": headers,
@@ -294,37 +326,51 @@ def get_page(url, **kwargs):
             "verify": verify_tls,
         }
         if request_method == "POST":
-            request_kwargs["data"] = post_data
-        req = req(url, **request_kwargs)
-        soup = BeautifulSoup(req.content, "html.parser")
-        return "{} {}".format(request_method, get_query(url)), req.status_code, soup, req.headers
-    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.TooManyRedirects):
+            resp = session.post(url, data=post_data, **request_kwargs)
+        else:
+            resp = session.get(url, **request_kwargs)
+        soup = BeautifulSoup(resp.content, "html.parser")
+        return "{} {}".format(request_method, get_query(url)), resp.status_code, soup, resp.headers
+    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError,
+            requests.exceptions.TooManyRedirects, requests.exceptions.SSLError,
+            requests.exceptions.ChunkedEncodingError):
+        return error_retval
+    except requests.exceptions.RequestException:
         return error_retval
     except Exception as e:
         if "timed out" in str(e).lower():
             return error_retval
-        else:
-            raise e.__class__(str(e))
+        raise
+    finally:
+        if resp is not None:
+            resp.close()
 
 
 def get_random_agent(path="{}/files/user_agents.txt"):
     """
     grab a random user-agent from the file to pass as
-    the HTTP User-Agent header
+    the HTTP User-Agent header. The agent list is cached
+    at module level after first load to avoid repeated
+    ~392KB disk reads on every request.
     """
-    try:
-        with open(path.format(HOME)) as agents:
-            items = [agent.strip() for agent in agents.readlines()]
-            return random.choice(items)
-    except:
-        with open("{}/content/files/user_agents.txt".format(CUR_DIR)) as agents:
-            items = [agent.strip() for agent in agents.readlines()]
-            return random.choice(items)
+    global _AGENT_CACHE
+    if _AGENT_CACHE is None:
+        try:
+            with open(path.format(HOME)) as agents:
+                _AGENT_CACHE = [agent.strip() for agent in agents.readlines() if agent.strip()]
+        except IOError:
+            try:
+                with open("{}/content/files/user_agents.txt".format(CUR_DIR)) as agents:
+                    _AGENT_CACHE = [agent.strip() for agent in agents.readlines() if agent.strip()]
+            except IOError:
+                _AGENT_CACHE = [DEFAULT_USER_AGENT]
+    return random.choice(_AGENT_CACHE)
 
 
 class SessionManager(object):
     """
-    session-based HTTP manager with connection pooling and retry support
+    session-based HTTP manager with connection pooling and retry support.
+    Respects the global TLS_VERIFY setting instead of hardcoding verify=False.
     """
     def __init__(self, proxy=None, agent=None, timeout=15, max_retries=3):
         self.session = requests.Session()
@@ -335,7 +381,7 @@ class SessionManager(object):
         if agent:
             self.session.headers.update({"User-Agent": agent})
         self.session.headers.update({"Connection": "keep-alive"})
-        self.session.verify = False
+        self.session.verify = TLS_VERIFY
         adapter = requests.adapters.HTTPAdapter(
             pool_connections=10,
             pool_maxsize=20,
@@ -548,7 +594,10 @@ def write_to_file(filename, path, data, **kwargs):
             import yaml
 
             with open(full_path, "a+") as _yaml:
-                _yaml_data = yaml.load(data)
+                # safe_load prevents arbitrary object construction from YAML tags
+                # (e.g. !!python/object/apply) which would be an RCE vector if the
+                # data ever originates from an untrusted scan result.
+                _yaml_data = yaml.safe_load(data)
                 yaml.dump(_yaml_data, _yaml, default_flow_style=False)
         except ImportError:
             # if you don't we'll just skip the saving and warn you
@@ -627,28 +676,56 @@ def parse_googler_file(filepath):
 
 def check_version(speak=True):
     """
-    check the version number for updates
+    check the version number for updates.
+    Uses a 3s timeout and a 24h local cache to avoid blocking
+    startup on slow/airgapped networks.
+    Returns: True (up-to-date), False (new version available), None (check failed/skipped).
     """
+    version_cache_path = "{}/.version_check".format(HOME)
+    cache_ttl = 86400  # 24 hours
+
+    # check local cache first
+    try:
+        if os.path.exists(version_cache_path):
+            mtime = os.path.getmtime(version_cache_path)
+            if time.time() - mtime < cache_ttl:
+                with open(version_cache_path, "r") as f:
+                    cached = f.read().strip()
+                if cached and cached != VERSION:
+                    if speak:
+                        lib.formatter.warn("new version: {} is available (cached)".format(cached))
+                    return False
+                return True
+    except (IOError, OSError):
+        pass
+
     version_url = "https://raw.githubusercontent.com/hnytgl/wafbypass/master/lib/settings.py"
     try:
-        req = requests.get(version_url)
-        content = req.text
-        version_identification = content.find("VERSION = ")
-        current_version = content[version_identification:version_identification + 17]
+        req = requests.get(version_url, timeout=3)
+        resp_text = req.text
+        req.close()
+        version_identification = resp_text.find("VERSION = ")
+        if version_identification == -1:
+            return None
+        current_version = resp_text[version_identification:version_identification + 17]
         current_version = str(current_version.strip().split('"')[1])
-        my_version = VERSION
-        if not current_version == my_version:
+        # write cache
+        try:
+            if not os.path.exists(HOME):
+                os.makedirs(HOME)
+            with open(version_cache_path, "w") as f:
+                f.write(current_version)
+        except (IOError, OSError):
+            pass
+        if current_version != VERSION:
             if speak:
                 lib.formatter.warn("new version: {} is available".format(current_version))
-                return False
-            else:
-                return False
-        else:
-            if not speak:
-                return True
-    except Exception:
-        lib.formatter.warn("error checking version, skipping")
+            return False
         return True
+    except Exception:
+        if speak:
+            lib.formatter.debug("error checking version, skipping")
+        return None
 
 
 def get_encoding_list(directory, is_tampers=True, is_wafs=False):
@@ -845,29 +922,29 @@ def shuffle_list(l):
 
 def make_saying_pretty(saying_string):
     """
-    make a random obfuscated saying string
+    Obfuscate the banner saying string using a deterministic, safe
+    transformation. Previously this randomly imported and executed a
+    tamper plugin from disk, which was a local privilege escalation
+    vector when the fallback directory (~/.wafbypass/tampers/) was
+    writable by an attacker. Now uses a seeded shuffle of inline
+    encoding transforms — no dynamic code execution.
     """
-    import importlib
+    import hashlib
 
-    skip_tampers = (
-        "base64encode", "doubleurlencode", "obfuscatebyordinal",
-        "tripleurlencode", "urlencode", "urlencodeall", "__pycach",
-        "__init__.", "__init__", "lowercase", "randomcase", "uppercase",
-        "enclosebrackets", "maskenclosebrackets", "space2null",
-        "tabifyspaceuncommon", "space2doubledash", "randomtabify",
-        "space2hash", "apostrephenullify", "apostrephemask",
-        "space2multicomment", "space2plus", "tabifyspacecommon",
-        "booleanmask", "space2randomblank"
-    )
-    tamper = [f[:-3].strip(".") for f in os.listdir(TAMPERS_DIRECTORY)]
-    new_tampers = []
-    for t in tamper:
-        if t not in skip_tampers:
-            new_tampers.append(t)
-    new_tampers = shuffle_list(list(set(new_tampers)))
-    random_tamper_import = TAMPERS_IMPORT_TEMPLATE.format(random.SystemRandom().choice(new_tampers))
-    tamper = importlib.import_module(random_tamper_import)
-    new_saying_string = tamper.tamper(saying_string)
+    # deterministic seed from version so banner is reproducible for bug reports
+    seed = int(hashlib.sha256(VERSION.encode()).hexdigest(), 16)
+    rng = random.Random(seed)
+
+    # inline safe transforms (no file I/O, no importlib)
+    transforms = [
+        lambda s: ''.join(c.upper() if rng.random() > 0.5 else c.lower() for c in s),
+        lambda s: s.replace(' ', '\t'),
+        lambda s: ''.join('&#{};'.format(ord(c)) if rng.random() > 0.7 else c for c in s),
+        lambda s: s[::-1],
+        lambda s: s,  # identity — sometimes no transform
+    ]
+    transform = rng.choice(transforms)
+    new_saying_string = transform(saying_string)
     new_saying_string = new_saying_string.split("();")
     new_saying = "({});".format(INSIDE_SAYING).join(new_saying_string)
     return new_saying

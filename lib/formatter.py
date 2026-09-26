@@ -1,8 +1,14 @@
+import os
+import sys
 import time
-try:
-    raw_input
-except:
-    raw_input = input
+
+# Enable ANSI VT processing on Windows 10 1511+ so color codes
+# render correctly instead of showing raw escape sequences.
+if sys.platform == "win32":
+    os.system("")
+
+# Disable color when stdout is not a TTY (piped/redirected output)
+_COLOR_ENABLED = hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
 
 
 def set_color(string, level=None):
@@ -20,6 +26,8 @@ def set_color(string, level=None):
         50: "\033[1m\033[30m{}\033[0m",
         60: "\033[7;31;31m{}\033[0m"
     }
+    if not _COLOR_ENABLED:
+        return string
     if level is None:
         return color_levels[20].format(string)
     else:
@@ -75,7 +83,7 @@ def success(string):
 
 def prompt(string, opts, default="n"):
     opts = list(opts)
-    choice = raw_input("\033[38m[{}]\033[0m[PROMPT] {}[{}]: ".format(
+    choice = input("\033[38m[{}]\033[0m[PROMPT] {}[{}]: ".format(
         time.strftime("%H:%M:%S"), string, "/".join(opts)
     ))
     if choice not in [o.lower() for o in opts]:
@@ -91,6 +99,6 @@ def discover(string):
 
 def progress(counter, name):
     print(
-        "\033[38m[{}]\033[0m".format(time.strftime("%H:%M:%S")) + set_color("[TRY]".format(counter), level=10) +
-        " {} {}".format(counter, name)
+        "\033[38m[{}]\033[0m".format(time.strftime("%H:%M:%S")) + set_color("[TRY {}]".format(counter), level=10) +
+        " {}".format(name)
     )
