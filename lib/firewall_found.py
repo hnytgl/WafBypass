@@ -7,7 +7,7 @@ import lib.settings
 
 
 def create_identifier(data):
-    return hashlib.sha1(str(data).encode("utf-8")).hexdigest()[1:10]
+    return hashlib.sha1(str(data).encode("utf-8"), usedforsecurity=False).hexdigest()[1:10]  # nosec B324
 
 
 def _redacted_command(args=None):

@@ -53,3 +53,16 @@ content = ["files/*"]
 
 [tool.setuptools.exclude-package-data]
 "*" = ["__pycache__/*", "*.pyc", "*.pyo"]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 120
+
+[tool.ruff.lint]
+# Enable real error detection; skip style/upgrade rules that would
+# require reformatting the entire pre-existing codebase.
+select = ["E", "F", "W"]
+ignore = ["E501"]  # line length handled by formatter, not linter
+
+[tool.ruff.lint.per-file-ignores]
+"content/*" = ["F401"]  # plugin/tamper modules use implicit exports

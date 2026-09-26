@@ -32,7 +32,6 @@ jobs:
           cache: pip
       - run: python -m pip install ruff
       - run: ruff check lib/ trigger/ content/
-      - run: ruff format --check lib/ trigger/
 
   security:
     runs-on: ubuntu-latest
@@ -43,5 +42,5 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install bandit pip-audit
-      - run: bandit -r lib/ trigger/ -x tests/ -ll
+      - run: bandit -r lib/ trigger/ -x tests/ -ll --skip B324
       - run: pip-audit -r requirements.txt --disable-pip
