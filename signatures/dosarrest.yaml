@@ -1,0 +1,12 @@
+schema_version: 1
+product: DOSarrest (DOSarrest Internet Security)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: dosarrest
+    fields: &id001
+    - body
+    - server
+  - regex: x.dis.request.id
+    fields: *id001
+confidence: high

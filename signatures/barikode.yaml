@@ -1,0 +1,11 @@
+schema_version: 1
+product: Barikode Web Application Firewall
+version: '2026.09'
+detection:
+  patterns:
+  - regex: <\w+>barikode<.\w+>
+    fields: &id001
+    - body
+  - regex: <h\d{1}>forbidden.access<.h\d{1}>
+    fields: *id001
+confidence: high

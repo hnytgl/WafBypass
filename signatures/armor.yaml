@@ -1,0 +1,11 @@
+schema_version: 1
+product: Armor Protection (Armor Defense)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: \barmor\b
+    fields: &id001
+    - body
+  - regex: blocked.by.website.protection.from.armour
+    fields: *id001
+confidence: high

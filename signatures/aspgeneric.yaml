@@ -1,0 +1,33 @@
+schema_version: 1
+product: ASP.NET Generic Website Protection (MS)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: this.generic.403.error.means.that.the.authenticated
+    fields: &id001
+    - asp-id
+    - body
+    - set-cookie
+    - x-aspnet-version
+    - x-powered-by
+  - regex: request.could.not.be.understood
+    fields: *id001
+  - regex: potentially.dangerous.request
+    fields: *id001
+  - regex: runtime.error
+    fields: *id001
+  - regex: asp.net(.+)?
+    fields: *id001
+  - regex: a.potentially.dangerous.request.path.value.was.detected.from.the.client
+    fields: *id001
+  - regex: asp.net.sessionid
+    fields: *id001
+  - regex: errordocument.to.handle.the.request
+    fields: *id001
+  - regex: an.application.error.occurred.on.the.server
+    fields: *id001
+  - regex: error.log.record.number
+    fields: *id001
+  - regex: error.page.might.contain.sensitive.information
+    fields: *id001
+confidence: high

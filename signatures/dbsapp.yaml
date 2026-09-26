@@ -1,0 +1,35 @@
+schema_version: 1
+product: DBAPP Security WAF (安恒信息)
+version: '2026.09'
+tags:
+- chinese
+detection:
+  match_all_headers: true
+  patterns:
+  - regex: dbappsecurity
+    fields: &id001
+    - body
+    - server
+  - regex: dbapp
+    fields: *id001
+  - regex: 安恒
+    fields: *id001
+  - regex: 明御
+    fields: *id001
+  - regex: mingyu
+    fields: *id001
+  status_rules:
+  - status:
+    - 403
+    - 405
+    patterns:
+    - regex: dbappsecurity
+      fields:
+      - server
+    - regex: dbapp
+      fields:
+      - server
+    - regex: 安恒
+      fields:
+      - server
+confidence: medium

@@ -1,0 +1,38 @@
+schema_version: 1
+product: GCP Cloud Armor (Google Cloud Platform)
+version: '2026.09'
+tags:
+- cloud
+detection:
+  patterns:
+  - regex: x-cloud-trace-context
+    fields: &id001
+    - body
+    - server
+    - via
+  - regex: cloud armor
+    fields: *id001
+  - regex: google frontend
+    fields: *id001
+  contains:
+  - value: blocked
+    field: body
+  status_rules:
+  - status:
+    - 403
+    - 429
+    - 502
+    patterns:
+    - regex: x-cloud-trace-context
+      fields:
+      - server
+      - via
+    - regex: cloud armor
+      fields:
+      - server
+      - via
+    - regex: google frontend
+      fields:
+      - server
+      - via
+confidence: medium

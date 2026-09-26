@@ -1,0 +1,30 @@
+schema_version: 1
+product: Symantec WAF (Symantec/Blue Coat)
+version: '2026.09'
+detection:
+  match_all_headers: true
+  patterns:
+  - regex: symantec
+    fields: &id001
+    - body
+    - server
+  - regex: blue.coat
+    fields: *id001
+  - regex: bluecoat
+    fields: *id001
+  - regex: x-bluecoat
+    fields: *id001
+  status_rules:
+  - status:
+    - 403
+    patterns:
+    - regex: symantec
+      fields:
+      - server
+    - regex: blue.coat
+      fields:
+      - server
+    - regex: bluecoat
+      fields:
+      - server
+confidence: medium

@@ -1,0 +1,16 @@
+schema_version: 1
+product: INFOSAFE by http://7i24.com
+version: '2026.09'
+detection:
+  patterns:
+  - regex: infosafe
+    fields: &id001
+    - body
+    - server
+  - regex: by.(http(s)?(.//)?)?7i24.(com|net)
+    fields: *id001
+  - regex: infosafe.\d.\d
+    fields: *id001
+  - regex: var.infosafekey=
+    fields: *id001
+confidence: high

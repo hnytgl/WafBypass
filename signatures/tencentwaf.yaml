@@ -1,0 +1,35 @@
+schema_version: 1
+product: Tencent Cloud WAF (Tencent)
+version: '2026.09'
+tags:
+- chinese
+- cloud
+detection:
+  patterns:
+  - regex: tencent
+    fields: &id001
+    - body
+    - server
+  - regex: qcloud
+    fields: *id001
+  - regex: waf\.tencent
+    fields: *id001
+  - regex: cloud\.tencent\.com
+    fields: *id001
+  status_rules:
+  - status:
+    - 403
+    patterns:
+    - regex: tencent
+      fields:
+      - server
+    - regex: qcloud
+      fields:
+      - server
+    - regex: waf\.tencent
+      fields:
+      - server
+tamper_hints:
+- encoding
+- whitespace
+confidence: medium

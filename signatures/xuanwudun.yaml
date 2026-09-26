@@ -1,0 +1,16 @@
+schema_version: 1
+product: Xuanwudun WAF
+version: '2026.09'
+detection:
+  patterns:
+  - regex: <.+.class=.(db)?waf(.)?(-row.)?>
+    fields:
+    - body
+  status_rules:
+  - status:
+    - 403
+    patterns:
+    - regex: <.+.class=.(db)?waf(.)?(-row.)?>
+      fields:
+      - body
+confidence: medium

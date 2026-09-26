@@ -1,0 +1,10 @@
+schema_version: 1
+product: IBM Websphere DataPower Firewall (IBM)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: \A(ok|fail)
+    fields:
+    - body
+    - x-backside-transport
+confidence: high

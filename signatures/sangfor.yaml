@@ -1,0 +1,24 @@
+schema_version: 1
+product: Sangfor Web Application Firewall (Sangfor Technologies)
+version: '2026.09'
+detection:
+  match_all_headers: true
+  patterns:
+  - regex: sangfor
+    fields: &id001
+    - body
+    - server
+  - regex: x-sangfor
+    fields: *id001
+  status_rules:
+  - status:
+    - 403
+    - 405
+    patterns:
+    - regex: sangfor
+      fields:
+      - server
+    - regex: x-sangfor
+      fields:
+      - server
+confidence: medium

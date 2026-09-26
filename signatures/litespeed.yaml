@@ -1,0 +1,9 @@
+schema_version: 1
+product: Litespeed webserver Generic Protection
+version: '2026.09'
+detection:
+  patterns:
+  - regex: litespeed.web.server
+    fields:
+    - body
+confidence: high

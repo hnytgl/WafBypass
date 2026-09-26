@@ -1,0 +1,24 @@
+schema_version: 1
+product: Amazon Web Services Web Application Firewall (Amazon)
+version: '2026.09'
+tags:
+- cloud
+detection:
+  patterns:
+  - regex: <RequestId>[0-9a-zA-Z]{16,25}<.RequestId>
+    fields: &id001
+    - body
+    - server
+    - set-cookie
+    - x-powered-by
+  - regex: <Error><Code>AccessDenied<.Code>
+    fields: *id001
+  - regex: \baws(alb)?.
+    fields: *id001
+  - regex: x.amz.id.\d+
+    fields: *id001
+  - regex: x.amz.request.id
+    fields: *id001
+  - regex: amazon.\d+
+    fields: *id001
+confidence: high

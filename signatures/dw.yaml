@@ -1,0 +1,17 @@
+schema_version: 1
+product: DynamicWeb Injection Check (DynamicWeb)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: dw.inj.check
+    fields:
+    - body
+    - x-403-status-by
+  status_rules:
+  - status:
+    - 403
+    patterns:
+    - regex: dw.inj.check
+      fields:
+      - x-403-status-by
+confidence: medium

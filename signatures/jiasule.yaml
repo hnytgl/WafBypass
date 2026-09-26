@@ -1,0 +1,20 @@
+schema_version: 1
+product: Jiasule (WAF)
+version: '2026.09'
+tags:
+- cdn
+- chinese
+detection:
+  patterns:
+  - regex: ^jsl(_)?tracking
+    fields: &id001
+    - body
+    - server
+    - set-cookie
+  - regex: (__)?jsluid(=)?
+    fields: *id001
+  - regex: notice.jiasule
+    fields: *id001
+  - regex: (static|www|dynamic).jiasule.(com|net)
+    fields: *id001
+confidence: high

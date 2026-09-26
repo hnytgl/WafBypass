@@ -1,0 +1,59 @@
+schema_version: 1
+product: Unknown Firewall
+version: '2026.09'
+detection:
+  patterns:
+  - regex: blocked
+    fields: &id001
+    - body
+  - regex: illegal
+    fields: *id001
+  - regex: reported
+    fields: *id001
+  - regex: ip.logged
+    fields: *id001
+  - regex: ip.address.logged
+    fields: *id001
+  - regex: not.acceptable
+    fields: *id001
+  - regex: unauthorized
+    fields: *id001
+  - regex: permission
+    fields: *id001
+  - regex: waf
+    fields: *id001
+  - regex: ids
+    fields: *id001
+  - regex: ips
+    fields: *id001
+  - regex: automated
+    fields: *id001
+  - regex: suspicious
+    fields: *id001
+  - regex: denied
+    fields: *id001
+  - regex: attack(ed)?
+    fields: *id001
+  - regex: rejected
+    fields: *id001
+  - regex: security
+    fields: *id001
+  - regex: detected
+    fields: *id001
+  - regex: protected(.\w+)?
+    fields: *id001
+  status_rules:
+  - status:
+    - 200
+    - 404
+    patterns:
+    - regex: blocked
+      fields:
+      - body
+    - regex: illegal
+      fields:
+      - body
+    - regex: reported
+      fields:
+      - body
+confidence: medium

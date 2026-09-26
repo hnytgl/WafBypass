@@ -1,0 +1,15 @@
+schema_version: 1
+product: Squid Proxy (IDS)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: squid
+    fields: &id001
+    - body
+    - eventsquid-id
+    - server
+  - regex: Access control configuration prevents
+    fields: *id001
+  - regex: X.Squid.Error
+    fields: *id001
+confidence: high

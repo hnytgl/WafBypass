@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/hnytgl/WafBypass/signatures/_schema.json",
+  "title": "WAFBypass Signature Schema v1",
+  "description": "Declarative WAF detection signature format. Replaces Python plugin files with auditable YAML rules.",
+  "type": "object",
+  "required": ["schema_version", "product", "detection"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version. Must be 1."
+    },
+    "product": {
+      "type": "string",
+      "minLength": 1,
+      "description": "WAF product name (equivalent to __product__ in Python plugins)"
+    },
+    "vendor": {
+      "type": "string",
+      "description": "Vendor/company name"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d{4}\\.\\d{2}$",
+      "description": "Signature version in YYYY.MM format"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Classification tags (cdn, cloud, hardware, opensource, chinese, etc.)"
+    },
+    "detection": {
+      "type": "object",
+      "description": "Detection rules. At least one sub-key must be present.",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "header_presence": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Header names that trigger detection when non-empty (e.g. CF-RAY)"
+        },
+        "patterns": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/pattern" },
+          "description": "Regex patterns matched against specified fields"
+        },
+        "contains": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/contains" },
+          "description": "Simple substring checks"
+        },
+        "status_rules": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/status_rule" },
+          "description": "Conditional rules that only apply for specific HTTP status codes"
+        },
+        "match_all_headers": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, match patterns against ALL header keys and values"
+        },
+        "conditional": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/conditional" },
+          "description": "Multi-step rules: only check patterns if a prerequisite header is present"
+        }
+      }
+    },
+    "tamper_hints": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Recommended bypass technique families for AdaptiveRanker"
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["high", "medium", "low"],
+      "default": "medium",
+      "description": "Detection confidence level"
+    },
+    "false_positive_risk": {
+      "type": "string",
+      "enum": ["high", "medium", "low"],
+      "default": "low",
+      "description": "Risk of false positive detections"
+    },
+    "last_verified": {
+      "type": "string",
+      "format": "date",
+      "description": "Date this signature was last verified against a live target"
+    }
+  },
+  "$defs": {
+    "pattern": {
+      "type": "object",
+      "required": ["regex", "fields"],
+      "additionalProperties": false,
+      "properties": {
+        "regex": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Regular expression pattern"
+        },
+        "fields": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Fields to match against: body, server, set-cookie, cookie, x-powered-by, via, x-cache, location, expect-ct, all_headers, or any custom header name (lowercase)"
+        },
+        "flags": {
+          "type": "string",
+          "default": "i",
+          "description": "Regex flags: i=ignorecase, m=multiline, s=dotall. Combined as string."
+        },
+        "negate": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, pattern must NOT match for detection to trigger"
+        }
+      }
+    },
+    "contains": {
+      "type": "object",
+      "required": ["value", "field"],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Substring to search for"
+        },
+        "field": {
+          "type": "string",
+          "description": "Field to search in (same as pattern fields, singular)"
+        },
+        "case_sensitive": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the contains check is case-sensitive"
+        }
+      }
+    },
+    "status_rule": {
+      "type": "object",
+      "required": ["status"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 100, "maximum": 599 },
+          "minItems": 1,
+          "description": "HTTP status codes that trigger this rule"
+        },
+        "patterns": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/pattern" },
+          "description": "Patterns to check only when status matches"
+        },
+        "contains": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/contains" },
+          "description": "Contains checks only when status matches"
+        }
+      }
+    },
+    "conditional": {
+      "type": "object",
+      "required": ["if_header", "patterns"],
+      "additionalProperties": false,
+      "properties": {
+        "if_header": {
+          "type": "string",
+          "description": "Header name that must be non-empty for patterns to be checked"
+        },
+        "patterns": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/pattern" },
+          "description": "Patterns to check only when if_header is present"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+schema_version: 1
+product: WatchGuard WAF
+version: '2026.09'
+detection:
+  patterns:
+  - regex: (request.denied.by.)?watchguard.firewall
+    fields: &id001
+    - body
+    - server
+  - regex: watchguard(.technologies(.inc)?)?
+    fields: *id001
+  contains:
+  - value: watchguard
+    field: server
+confidence: high

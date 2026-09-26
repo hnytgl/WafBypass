@@ -1,0 +1,36 @@
+schema_version: 1
+product: ChinaCache CDN WAF (ChinaCache)
+version: '2026.09'
+detection:
+  match_all_headers: true
+  patterns:
+  - regex: chinacache
+    fields: &id001
+    - body
+    - server
+    - via
+    - x-powered-by
+  - regex: ccwaf
+    fields: *id001
+  - regex: cc-cache
+    fields: *id001
+  status_rules:
+  - status:
+    - 403
+    patterns:
+    - regex: chinacache
+      fields:
+      - server
+      - via
+      - x-powered-by
+    - regex: ccwaf
+      fields:
+      - server
+      - via
+      - x-powered-by
+    - regex: cc-cache
+      fields:
+      - server
+      - via
+      - x-powered-by
+confidence: medium

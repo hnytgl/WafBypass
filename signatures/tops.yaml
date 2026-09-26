@@ -1,0 +1,29 @@
+schema_version: 1
+product: TopSec WAF (TopSec/天融信)
+version: '2026.09'
+detection:
+  match_all_headers: true
+  patterns:
+  - regex: topsec
+    fields: &id001
+    - body
+    - server
+  - regex: tops
+    fields: *id001
+  - regex: 天融信
+    fields: *id001
+  status_rules:
+  - status:
+    - 403
+    - 405
+    patterns:
+    - regex: topsec
+      fields:
+      - server
+    - regex: tops
+      fields:
+      - server
+    - regex: 天融信
+      fields:
+      - server
+confidence: medium

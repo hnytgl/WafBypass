@@ -1,0 +1,26 @@
+schema_version: 1
+product: FortiWeb Web Application Firewall (Fortinet)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: <.+>powered.by.fortinet<.+.>
+    fields: &id001
+    - body
+    - set-cookie
+  - regex: <.+>fortigate.ips.sensor<.+.>
+    fields: *id001
+  - regex: fortigate
+    fields: *id001
+  - regex: .fgd_icon
+    fields: *id001
+  - regex: \AFORTIWAFSID=
+    fields: *id001
+  - regex: application.blocked.
+    fields: *id001
+  - regex: .fortiGate.application.control
+    fields: *id001
+  - regex: (http(s)?)?://\w+.fortinet(.\w+:)?
+    fields: *id001
+  - regex: fortigate.hostname
+    fields: *id001
+confidence: high

@@ -1,0 +1,17 @@
+schema_version: 1
+product: Grey Wizard Protection
+version: '2026.09'
+detection:
+  patterns:
+  - regex: greywizard(.\d.\d(.\d)?)?
+    fields: &id001
+    - body
+    - gw-server
+    - server
+  - regex: grey.wizard.block
+    fields: *id001
+  - regex: (http(s)?.//)?(\w+.)?greywizard.com
+    fields: *id001
+  - regex: grey.wizard
+    fields: *id001
+confidence: high

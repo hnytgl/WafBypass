@@ -1,0 +1,22 @@
+schema_version: 1
+product: WebKnight Application Firewall (AQTRONIX)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: \bwebknight
+    fields: &id001
+    - body
+    - server
+  - regex: webknight
+    fields: *id001
+  status_rules:
+  - status:
+    - 999
+    patterns:
+    - regex: \bwebknight
+      fields:
+      - server
+    - regex: webknight
+      fields:
+      - server
+confidence: medium

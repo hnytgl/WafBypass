@@ -1,0 +1,19 @@
+schema_version: 1
+product: Alert Logic (SIEMless Threat Management)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: <.+>requested.url.cannot.be.found<.+.>
+    fields: &id001
+    - body
+  - regex: proceed.to.homepage
+    fields: *id001
+  - regex: back.to.previous.page
+    fields: *id001
+  - regex: we('re|.are)?sorry(.)?.but.the.page.you.are.looking.for.cannot
+    fields: *id001
+  - regex: reference.id(.)?
+    fields: *id001
+  - regex: page.has.either.been.removed(.)?.renamed
+    fields: *id001
+confidence: high

@@ -1,0 +1,12 @@
+schema_version: 1
+product: Deny All Web Application Firewall (DenyAll)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: \Acondition.intercepted
+    fields: &id001
+    - body
+    - set-cookie
+  - regex: \Asessioncookie=
+    fields: *id001
+confidence: high

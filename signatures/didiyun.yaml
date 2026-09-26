@@ -1,0 +1,12 @@
+schema_version: 1
+product: DiDiYun WAF (DiDi)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: (http(s)?://)(sec-waf.|www.)?didi(static|yun)?.com(/static/cloudwafstatic)?
+    fields: &id001
+    - body
+    - server
+  - regex: didiyun
+    fields: *id001
+confidence: high

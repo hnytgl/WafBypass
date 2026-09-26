@@ -1,0 +1,28 @@
+schema_version: 1
+product: Signal Sciences WAF (Fastly/Signal Sciences)
+version: '2026.09'
+detection:
+  match_all_headers: true
+  patterns:
+  - regex: sigsci
+    fields: &id001
+    - body
+  - regex: signal sciences
+    fields: *id001
+  - regex: x-sigsci-
+    fields: *id001
+  status_rules:
+  - status:
+    - 403
+    - 406
+    patterns:
+    - regex: sigsci
+      fields:
+      - body
+    - regex: signal sciences
+      fields:
+      - body
+    - regex: x-sigsci-
+      fields:
+      - body
+confidence: medium

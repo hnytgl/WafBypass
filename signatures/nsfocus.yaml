@@ -1,0 +1,29 @@
+schema_version: 1
+product: NSFOCUS Web Application Firewall (NSFOCUS)
+version: '2026.09'
+tags:
+- chinese
+detection:
+  match_all_headers: true
+  patterns:
+  - regex: nsfocus
+    fields: &id001
+    - body
+  - regex: nsf\.?waf
+    fields: *id001
+  - regex: x-nsf
+    fields: *id001
+  status_rules:
+  - status:
+    - 403
+    patterns:
+    - regex: nsfocus
+      fields:
+      - body
+    - regex: nsf\.?waf
+      fields:
+      - body
+    - regex: x-nsf
+      fields:
+      - body
+confidence: medium

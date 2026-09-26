@@ -1,0 +1,13 @@
+schema_version: 1
+product: Radware (AppWall WAF)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: .\bcloudwebsec.radware.com\b.
+    fields: &id001
+    - body
+  - regex: <.+>unauthorized.activity.has.been.detected<.+.>
+    fields: *id001
+  - regex: with.the.following.case.number.in.its.subject:.\d+.
+    fields: *id001
+confidence: high

@@ -1,0 +1,11 @@
+schema_version: 1
+product: Nginx Generic Protection
+version: '2026.09'
+detection:
+  patterns:
+  - regex: nginx
+    fields: &id001
+    - body
+  - regex: you.do(not|n.t)?.have.permission.to.access.this.document
+    fields: *id001
+confidence: high

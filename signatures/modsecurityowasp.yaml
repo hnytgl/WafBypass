@@ -1,0 +1,27 @@
+schema_version: 1
+product: Mod Security (OWASP CSR)
+version: '2026.09'
+tags:
+- opensource
+detection:
+  patterns:
+  - regex: not.acceptable
+    fields: &id001
+    - body
+  - regex: additionally\S.a.406.not.acceptable
+    fields: *id001
+  status_rules:
+  - status:
+    - 406
+    patterns:
+    - regex: not.acceptable
+      fields:
+      - body
+    - regex: additionally\S.a.406.not.acceptable
+      fields:
+      - body
+tamper_hints:
+- comment
+- case
+- keyword
+confidence: medium

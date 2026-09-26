@@ -1,0 +1,39 @@
+schema_version: 1
+product: Yundun Web Application Firewall (Yundun)
+version: '2026.09'
+tags:
+- chinese
+detection:
+  patterns:
+  - regex: YUNDUN
+    fields: &id001
+    - body
+    - server
+    - set-cookie
+    - x-cache
+  - regex: ^yd.cookie=(\w+)?
+    fields: *id001
+  - regex: http(s)?.//(www)?.(\w+)?(.)?yundun(.com)?
+    fields: *id001
+  - regex: <title>.403.forbidden:.access.is.denied(.)?.<.(.)?title>
+    fields: *id001
+  status_rules:
+  - status:
+    - 461
+    patterns:
+    - regex: YUNDUN
+      fields:
+      - server
+      - set-cookie
+      - x-cache
+    - regex: ^yd.cookie=(\w+)?
+      fields:
+      - server
+      - set-cookie
+      - x-cache
+    - regex: http(s)?.//(www)?.(\w+)?(.)?yundun(.com)?
+      fields:
+      - server
+      - set-cookie
+      - x-cache
+confidence: medium

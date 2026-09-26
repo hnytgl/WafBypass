@@ -750,6 +750,26 @@ def detection_main(url, payloads, cursor, **kwargs):
     final_headers = {}
 
     lib.formatter.info("loading firewall detection scripts")
+
+    # Load YAML signature engine (preferred: declarative, no code execution)
+    sig_engine = None
+    use_yaml = not kwargs.get("no_yaml_signatures", False)
+    if use_yaml:
+        try:
+            from lib.signature_loader import SignatureEngine
+            sig_engine = SignatureEngine(verbose=verbose)
+            sig_engine.load_builtin()
+            sig_engine.load_user()
+            if sig_engine.count > 0:
+                lib.formatter.info("loaded {} YAML signatures".format(sig_engine.count))
+            else:
+                sig_engine = None
+        except Exception as e:
+            if verbose:
+                lib.formatter.debug("YAML signature engine unavailable: {}".format(e))
+            sig_engine = None
+
+    # Load Python plugins as fallback (for complex plugins not yet migrated)
     loaded_plugins = ScriptQueue(
         lib.settings.PLUGINS_DIRECTORY, lib.settings.PLUGINS_IMPORT_TEMPLATE, verbose=verbose
     ).load_scripts()
@@ -762,7 +782,22 @@ def detection_main(url, payloads, cursor, **kwargs):
     for item in responses:
         item = item if item is not None else normal_response
         _, status, html, headers = item
+
+        # Phase 1: YAML signature engine (fast, safe, no code execution)
+        yaml_matched_products = set()
+        if sig_engine is not None:
+            yaml_results = sig_engine.detect(str(html), headers=headers, status=status)
+            for result in yaml_results:
+                yaml_matched_products.add(result.product)
+                temp.append(result.product)
+                match_counts[result.product] = match_counts.get(result.product, 0) + 1
+                match_statuses.setdefault(result.product, set()).add(status)
+
+        # Phase 2: Python plugin fallback (only for products not already matched by YAML)
         for detection in loaded_plugins:
+            product_name = getattr(detection, "__product__", None)
+            if product_name and product_name in yaml_matched_products:
+                continue  # Already detected by YAML engine, skip redundant check
             if verbose:
                 lib.formatter.debug("running {}".format(detection))
             try:

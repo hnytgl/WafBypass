@@ -1,0 +1,45 @@
+schema_version: 1
+product: AWS WAF v2 (Amazon Web Services)
+version: '2026.09'
+tags:
+- cloud
+detection:
+  patterns:
+  - regex: awselb/.+
+    fields: &id001
+    - body
+    - server
+    - via
+    - x-amzn-requestid
+    - x-cache
+  - regex: x-amzn-requestid
+    fields: *id001
+  - regex: x-amz-id-\d+
+    fields: *id001
+  - regex: x-amz-request-id
+    fields: *id001
+  - regex: request has been blocked
+    fields: *id001
+  - regex: aws.waf
+    fields: *id001
+  contains:
+  - value: 403 forbidden
+    field: body
+  - value: error from gateway
+    field: body
+  conditional:
+  - if_header: x-amzn-requestid
+    patterns:
+    - regex: awselb/.+
+      fields:
+      - body
+      - server
+    - regex: x-amzn-requestid
+      fields:
+      - body
+      - server
+    - regex: x-amz-id-\d+
+      fields:
+      - body
+      - server
+confidence: medium

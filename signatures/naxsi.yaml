@@ -1,0 +1,34 @@
+schema_version: 1
+product: NAXSI Web Application Firewall (NBS System)
+version: '2026.09'
+tags:
+- opensource
+detection:
+  match_all_headers: true
+  patterns:
+  - regex: naxsi
+    fields: &id001
+    - body
+    - server
+  - regex: blocked by naxsi
+    fields: *id001
+  - regex: x-nbs
+    fields: *id001
+  status_rules:
+  - status:
+    - 403
+    - 418
+    patterns:
+    - regex: naxsi
+      fields:
+      - server
+    - regex: blocked by naxsi
+      fields:
+      - server
+    - regex: x-nbs
+      fields:
+      - server
+tamper_hints:
+- case
+- comment
+confidence: medium

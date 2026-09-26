@@ -266,6 +266,29 @@ def main():
         subprocess.call(["git", "-C", CUR_DIR, "pull", "--ff-only", "origin", "master"])
         exit(0)
 
+    # Signature pack management
+    if opt.checkSignatures:
+        from lib.signature_updater import SignatureUpdater
+        updater = SignatureUpdater(source_url=opt.signatureUrl)
+        status = updater.check()
+        if status is None:
+            fatal("cannot reach signature release server")
+            exit(1)
+        local = status["local_version"]
+        remote = status["remote_version"]
+        if status["update_available"]:
+            warn("signature update available: {} -> {}".format(local, remote))
+            info("run with --update-signatures to install")
+        else:
+            success("signatures are up-to-date (version {})".format(local))
+        exit(0)
+
+    if opt.updateSignatures:
+        from lib.signature_updater import SignatureUpdater
+        updater = SignatureUpdater(source_url=opt.signatureUrl)
+        success_flag = updater.update()
+        exit(0 if success_flag else 1)
+
     if not opt.hideBanner:
         if opt.iAmTeapot:
             import base64

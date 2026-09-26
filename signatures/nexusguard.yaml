@@ -1,0 +1,11 @@
+schema_version: 1
+product: NexusGuard Security (WAF)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: nexus(.)?guard
+    fields: &id001
+    - body
+  - regex: ((http(s)?://)?speresources.)?nexusguard.com.wafpage
+    fields: *id001
+confidence: high

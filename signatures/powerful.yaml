@@ -1,0 +1,21 @@
+schema_version: 1
+product: Powerful Firewall (MyBB plugin)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: Powerful Firewall
+    fields: &id001
+    - body
+  - regex: http(s)?...tiny.cc.powerful.firewall
+    fields: *id001
+  status_rules:
+  - status:
+    - 403
+    patterns:
+    - regex: Powerful Firewall
+      fields:
+      - body
+    - regex: http(s)?...tiny.cc.powerful.firewall
+      fields:
+      - body
+confidence: medium

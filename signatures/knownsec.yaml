@@ -1,0 +1,29 @@
+schema_version: 1
+product: KnownSec WAF (KnownSec)
+version: '2026.09'
+tags:
+- chinese
+detection:
+  match_all_headers: true
+  patterns:
+  - regex: knownsec
+    fields: &id001
+    - body
+  - regex: ks-waf
+    fields: *id001
+  - regex: knowsec
+    fields: *id001
+  status_rules:
+  - status:
+    - 403
+    patterns:
+    - regex: knownsec
+      fields:
+      - body
+    - regex: ks-waf
+      fields:
+      - body
+    - regex: knowsec
+      fields:
+      - body
+confidence: medium

@@ -1,0 +1,23 @@
+schema_version: 1
+product: Open Source Web Application Firewall (Modsecurity)
+version: '2026.09'
+tags:
+- opensource
+detection:
+  patterns:
+  - regex: ModSecurity|NYOB
+    fields: &id001
+    - body
+  - regex: mod_security
+    fields: *id001
+  - regex: This.error.was.generated.by.mod.security
+    fields: *id001
+  - regex: web.server at
+    fields: *id001
+  - regex: page.you.are.(accessing|trying)?.(to|is)?.(access)?.(is|to)?.(restricted)?
+    fields: *id001
+tamper_hints:
+- comment
+- case
+- keyword
+confidence: high
