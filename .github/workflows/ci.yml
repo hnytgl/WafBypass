@@ -43,4 +43,4 @@ jobs:
           cache: pip
       - run: python -m pip install bandit pip-audit
       - run: bandit -r lib/ trigger/ -x tests/ -ll --skip B324
-      - run: pip-audit -r requirements.txt --disable-pip
+      - run: pip-audit -r requirements.txt --no-deps --disable-pip

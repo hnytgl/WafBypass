@@ -172,7 +172,8 @@ URL_VALIDATION = re.compile(
 )
 
 
-class InvalidURLProvided(Exception): pass
+class InvalidURLProvided(Exception):
+    pass
 
 
 class HTTP_HEADER:
@@ -633,7 +634,7 @@ def write_to_file(filename, path, data, **kwargs):
         try:
             shutil.copy(full_path, save_copy)
             lib.formatter.info("copy of file saved to {}".format(save_copy))
-        except Exception as e:
+        except Exception:
             lib.formatter.error("failed to save copy of file, do you have permissions?")
 
     return full_path
