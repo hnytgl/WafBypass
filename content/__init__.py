@@ -416,16 +416,37 @@ def get_working_tampers(url, norm_response, payloads, **kwargs):
                         else:
                             payloaded_url = "{}{}".format(url, tampered)
 
-                        _, status, html, _ = lib.settings.get_page(
+                        _, status, html, resp_headers = lib.settings.get_page(
                             payloaded_url, agent=agent, proxy=proxy, verbose=verbose, provided_headers=provided_headers,
                             throttle=throttle, timeout=req_timeout
                         )
 
                         if adaptive_bypass and block_sig is not None:
-                            verdict = block_sig.observe((None, status, html, None))
+                            verdict = block_sig.observe((None, status, html, None), headers=resp_headers)
                             blocked = verdict == "blocked"
-                            # "error" (transient network) and "redirect" are
-                            # not treated as block signals.
+                            # Rate-limiting: back off but don't penalize the tamper family
+                            if verdict == "rate_limited":
+                                backoff = block_sig.get_backoff_seconds()
+                                lib.formatter.warn(
+                                    "rate limited (429), backing off {}s (hit #{})".format(
+                                        backoff, block_sig.rate_limit_count
+                                    ), minor=True
+                                )
+                                time.sleep(backoff)
+                                # Don't count as blocked — retry same candidate later
+                                continue
+                            # Challenge page: payload bypass won't help
+                            if verdict == "challenge":
+                                if not getattr(block_sig, '_challenge_warned', False):
+                                    lib.formatter.warn(
+                                        "JS/CAPTCHA challenge detected ({}). Payload-level bypass "
+                                        "is not applicable. Consider --cookie-jar with a browser "
+                                        "clearance cookie, or --impersonate for TLS fingerprint "
+                                        "rotation.".format(block_sig.challenge_detected)
+                                    )
+                                    block_sig._challenge_warned = True
+                                candidate_blocked = True
+                                break
                         else:
                             blocked = find_failures(str(html), failed_schema)
 

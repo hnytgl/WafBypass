@@ -26,7 +26,12 @@ import lib.tamper_engine
 
 
 # Status codes that are strong static signals of a block page.
-BLOCK_STATUS_SEED = (400, 403, 406, 429, 502, 503)
+# NOTE: 429 is handled separately as rate-limiting, not a WAF rule block.
+BLOCK_STATUS_SEED = (400, 403, 406, 502, 503)
+
+# Status codes that indicate rate-limiting rather than WAF rule blocking.
+# The adaptive ranker should NOT penalize tamper families for these.
+RATE_LIMIT_STATUS = (429,)
 
 # 3xx responses are redirects -- neither a block signal nor a bypass.
 REDIRECT_STATUS = range(300, 400)
@@ -45,6 +50,44 @@ WORD_BLOCK_MARKERS = (
     re.compile(r"request\s+was\s+rejected", re.I),
     re.compile(r"ip\s+address\s+logged", re.I),
 )
+
+# Challenge page signatures: patterns that indicate a JS/CAPTCHA challenge
+# rather than a hard WAF rule block. When detected, payload-level bypass is
+# not applicable — the user needs cookie persistence or browser solving.
+CHALLENGE_SIGNATURES = {
+    "cloudflare_js": (
+        re.compile(r"cf[-_]chl[-_]rt[-_]tk", re.I),
+        re.compile(r"__cf_chl_jschl_tk__", re.I),
+        re.compile(r"challenges\.cloudflare\.com", re.I),
+    ),
+    "cloudflare_turnstile": (
+        re.compile(r"cf-turnstile", re.I),
+        re.compile(r"challenges\.cloudflare\.com/turnstile", re.I),
+    ),
+    "datadome": (
+        re.compile(r"datadome", re.I),
+        re.compile(r"dd\.js", re.I),
+        re.compile(r"captcha\.datadome\.co", re.I),
+    ),
+    "aws_waf": (
+        re.compile(r"aws-waf-token", re.I),
+        re.compile(r"challenge\.js", re.I),
+        re.compile(r"awswaf", re.I),
+    ),
+    "perimeterx": (
+        re.compile(r"_pxhd", re.I),
+        re.compile(r"px-captcha", re.I),
+        re.compile(r"perimeterx", re.I),
+    ),
+    "kasada": (
+        re.compile(r"x-kpsdk", re.I),
+        re.compile(r"149e9513", re.I),
+    ),
+    "human_security": (
+        re.compile(r"human[_-]?security", re.I),
+        re.compile(r"shape[_-]?security", re.I),
+    ),
+}
 
 # Technique family per tamper script. ``__category__`` on tampers is the
 # *payload* category (sqli/xss/...); this dict is the *technique* family used
@@ -174,7 +217,17 @@ WAF_TAMPER_HINTS = {
 
 
 class BlockSignature(object):
-    """Learn the target's block-page signature and classify responses."""
+    """Learn the target's block-page signature and classify responses.
+
+    Returns one of:
+      - ``blocked``: WAF rule block (403/406/502/503 or block-page markers)
+      - ``rate_limited``: HTTP 429 / Retry-After — NOT a tamper failure
+      - ``challenge``: JS/CAPTCHA challenge page (Cloudflare, DataDome, etc.)
+      - ``normal``: response looks like the baseline
+      - ``ambiguous``: cannot classify with confidence
+      - ``error``: status 0, transient network issue
+      - ``redirect``: 3xx
+    """
 
     MIN_BLOCK_SIM = 0.35
     MAX_LEN_DELTA = 0.5
@@ -189,6 +242,10 @@ class BlockSignature(object):
         self.block_tokens = None
         self.block_len = None
         self._learned = False
+        # challenge tracking
+        self.challenge_detected = None  # type of challenge if seen
+        self.rate_limit_count = 0
+        self.last_retry_after = 0  # seconds from Retry-After header
 
     @staticmethod
     def _tokenize(text):
@@ -208,18 +265,78 @@ class BlockSignature(object):
         self.block_len = len(text)
         self._learned = True
 
-    def observe(self, response):
+    @staticmethod
+    def _detect_challenge(text, headers):
+        """Check if response is a JS/CAPTCHA challenge page.
+
+        Returns challenge type string or None.
+        """
+        # Check headers for challenge indicators
+        if headers:
+            header_str = str(headers).lower()
+            if "cf-mitigated" in header_str or "cf-chl-bypass" in header_str:
+                return "cloudflare_js"
+            if "x-datadome" in header_str:
+                return "datadome"
+            if "x-px" in header_str or "x-perimeterx" in header_str:
+                return "perimeterx"
+
+        # Check body for challenge signatures
+        for challenge_type, patterns in CHALLENGE_SIGNATURES.items():
+            matches = sum(1 for p in patterns if p.search(text))
+            if matches >= 1:
+                return challenge_type
+        return None
+
+    @staticmethod
+    def _parse_retry_after(headers):
+        """Parse Retry-After header value in seconds. Returns 0 if absent."""
+        if not headers:
+            return 0
+        retry_after = None
+        if hasattr(headers, "get"):
+            retry_after = headers.get("Retry-After") or headers.get("retry-after")
+        if retry_after is None:
+            return 0
+        try:
+            return int(retry_after)
+        except (ValueError, TypeError):
+            # Could be an HTTP-date; default to 5s
+            return 5
+
+    def observe(self, response, headers=None):
         """Classify one probe response.
 
-        Returns one of: ``blocked``, ``normal``, ``ambiguous``, ``error``
-        (status 0, transient network issue) or ``redirect`` (3xx).
+        Args:
+            response: tuple of (_, status, html, _)
+            headers: optional response headers dict for Retry-After / challenge detection
+
+        Returns one of: ``blocked``, ``rate_limited``, ``challenge``,
+        ``normal``, ``ambiguous``, ``error``, ``redirect``.
         """
-        _, status, html, _ = response
+        _, status, html, resp_headers = response
+        # Use explicitly passed headers or fall back to response tuple headers
+        effective_headers = headers if headers is not None else (resp_headers if isinstance(resp_headers, dict) else None)
         text = str(html)
+
         if not status:
             return "error"
         if status in REDIRECT_STATUS:
             return "redirect"
+
+        # Rate-limiting: 429 is NOT a WAF rule block
+        if status in RATE_LIMIT_STATUS:
+            self.rate_limit_count += 1
+            self.last_retry_after = self._parse_retry_after(effective_headers)
+            return "rate_limited"
+
+        # Challenge page detection (before block detection)
+        challenge_type = self._detect_challenge(text, effective_headers)
+        if challenge_type:
+            self.challenge_detected = challenge_type
+            return "challenge"
+
+        # Standard block detection
         if status in BLOCK_STATUS_SEED:
             if not self._learned:
                 self._learn(status, text)
@@ -242,6 +359,13 @@ class BlockSignature(object):
 
     def likely_blocked(self, response):
         return self.observe(response) == "blocked"
+
+    def get_backoff_seconds(self):
+        """Return recommended backoff time after rate-limiting (AIMD)."""
+        if self.last_retry_after > 0:
+            return min(self.last_retry_after, 60)
+        # Exponential backoff: 1, 2, 4, 8, 16, 30 (cap)
+        return min(2 ** max(0, self.rate_limit_count - 1), 30)
 
 
 def family_for(candidate):
@@ -315,6 +439,7 @@ class AdaptiveRanker(object):
     def _stats(self, family):
         return self.family_stats.setdefault(family, {
             "tried": 0, "bypass": 0, "blocked": 0, "normal": 0, "error": 0,
+            "rate_limited": 0, "challenge": 0,
         })
 
     def _base_score(self, candidate):
