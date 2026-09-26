@@ -289,6 +289,14 @@ class WAFBypassParser(ArgumentParser):
                                "(e.g. cf_clearance exported from browser)")
         misc.add_argument("--export-cookies", dest="exportCookies", metavar="FILE",
                           help="Export session cookies to a Netscape-format file after scanning")
+        misc.add_argument("--max-rps", dest="maxRps", metavar="FLOAT", type=float, default=None,
+                          help="Maximum requests per second (auto-throttle). "
+                               "When set, adds inter-request delay to stay under this rate.")
+        misc.add_argument("--blind", dest="blindMode", action="store_true", default=False,
+                          help="Enable time-based blind detection: measures response delay "
+                               "to infer WAF processing (e.g. audit logging, deep inspection)")
+        misc.add_argument("--blind-threshold", dest="blindThreshold", metavar="MS", type=int, default=3000,
+                          help="Response time delta (ms) to consider a blind hit (default=3000)")
 
         hidden = parser.add_argument_group()
         hidden.add_argument("--clean", action="store_true", dest="cleanHomeFolder", help=SUPPRESS)

@@ -139,6 +139,9 @@ _SESSION = None
 # TLS fingerprint impersonation target (set via configure_transport)
 _IMPERSONATE = None
 
+# Last request elapsed time in milliseconds (for blind/timing analysis)
+_LAST_ELAPSED_MS = 0
+
 # arguments that need to be blocked from issue creations and waf creations
 SENSITIVE_ARGUMENTS = ("--proxy", "-u", "--url", "-D", "--data", "--pa", "-b", "--burp")
 
@@ -300,6 +303,12 @@ def close_session():
         _SESSION = None
 
 
+def get_last_elapsed_ms():
+    """Return the elapsed time (ms) of the most recent get_page() call.
+    Used for blind/timing-based detection."""
+    return _LAST_ELAPSED_MS
+
+
 def get_page(url, **kwargs):
     """
     get the website page, this will return a `tuple`
@@ -358,6 +367,13 @@ def get_page(url, **kwargs):
             resp = session.post(url, data=post_data, **request_kwargs)
         else:
             resp = session.get(url, **request_kwargs)
+        # Record elapsed time for blind/timing analysis
+        global _LAST_ELAPSED_MS
+        try:
+            elapsed = getattr(resp, "elapsed", None)
+            _LAST_ELAPSED_MS = int(elapsed.total_seconds() * 1000) if elapsed and hasattr(elapsed, "total_seconds") else 0
+        except (TypeError, AttributeError):
+            _LAST_ELAPSED_MS = 0
         soup = BeautifulSoup(resp.content, "html.parser")
         return "{} {}".format(request_method, get_query(url)), resp.status_code, soup, resp.headers
     except (requests.exceptions.Timeout, requests.exceptions.ConnectionError,
