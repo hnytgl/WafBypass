@@ -2,7 +2,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-green.svg)](https://www.python.org/)
-[![Version 3.1.0](https://img.shields.io/badge/version-3.1.0-orange.svg)](https://github.com/hnytgl/WafBypass)
+[![Version 3.2.0](https://img.shields.io/badge/version-3.2.0-orange.svg)](https://github.com/hnytgl/WafBypass)
 [![CI](https://github.com/hnytgl/WafBypass/actions/workflows/ci.yml/badge.svg)](https://github.com/hnytgl/WafBypass/actions/workflows/ci.yml)
 
 > 攻击即防御 —— 了解你的敌人，理解你的目标
@@ -13,16 +13,20 @@
 
 ---
 
-## 当前版本：v3.1.0
+## 当前版本：v3.2.0
 
-**v3.1.0 是自适应排名精度升级**，重点提升组合链评分、固定种子复现能力与 Unicode 阻断页识别。
+**v3.2.0 是安全加固与 TLS 指纹伪装版本**，修复了多项安全漏洞和性能瓶颈，并新增了浏览器级 TLS 指纹伪装能力。
 
-### v3.1.0 更新内容
+### v3.2.0 更新内容
 
-- **稳定的可复现排名**：固定随机种子后，重复排序不再因内部随机状态消耗而改变候选顺序
-- **组合链感知评分**：Tamper Chain 继承各组件的 WAF 家族提示、阶段权重和历史反馈
-- **Unicode 阻断页识别**：支持中文等非拉丁文本的 Unicode 分词与大小写折叠
-- 新增 3 项回归测试，全部 **59 项**测试通过
+- **TLS 指纹伪装**：新增 `--impersonate` 参数，通过 curl_cffi 后端模拟 Chrome/Safari/Firefox/Edge 的 TLS 指纹（JA3/JA4），绕过 Cloudflare、Akamai、DataDome 等在 TLS 握手层的拦截
+- **客户端指纹自检**：新增 `--tls-fingerprint` 参数，连接 tls.peet.ws 输出自身 JA3/JA4/HTTP2 指纹，诊断"payload 无效"还是"TLS 层已被标记"
+- **Cookie Jar 支持**：新增 `--cookie-jar` / `--export-cookies` 参数，支持导入浏览器已获取的 cf_clearance / aws-waf-token，跳过 JS Challenge
+- **安全修复**：消除 `yaml.load()` RCE 向量、移除 banner 动态导入 tamper 的本地提权路径、修复 SessionManager 硬编码 `verify=False`
+- **性能提升**：启用 `requests.Session` 连接池 + cookie 持久化（多 payload 扫描提速 3-10×）、缓存 user-agent 列表（消除每请求 392KB 磁盘读）、`check_version` 加 3s 超时 + 24h 本地缓存
+- **健壮性**：Windows ANSI 颜色支持、非 TTY 自动禁用颜色、broaden 异常捕获、移除 Python 2 兼容垫片、`--no-update-check` 跳过启动版本检查
+- **CI 增强**：新增 ruff lint + bandit + pip-audit 安全扫描 job，matrix 补全 Python 3.10/3.11
+- 全部 **59 项**测试通过（ubuntu + windows × Python 3.9-3.13）
 
 ### v3.0.0 更新内容
 
@@ -74,7 +78,7 @@ wafbypass -u "https://lab.example/?id=1" --payload-type sqli \
 
 ## 目录
 
-- [当前版本：v3.1.0](#当前版本v310)
+- [当前版本：v3.2.0](#当前版本v320)
 - [功能特性](#功能特性)
 - [可检测的防火墙](#可检测的防火墙)
 - [可用的绕过脚本](#可用的绕过脚本)
@@ -93,14 +97,16 @@ wafbypass -u "https://lab.example/?id=1" --payload-type sqli \
 
 - **WAF检测**：支持检测 **112+** 种Web应用防火墙和防护系统
 - **自动绕过**：内置 **81** 种绕过脚本（Tamper Scripts），支持受预算约束的 2–3 层组合链
+- **TLS 指纹伪装**：通过 curl_cffi 模拟 Chrome/Safari/Firefox/Edge 浏览器 TLS 指纹，绕过 Cloudflare/Akamai/DataDome 的 JA3 层拦截
 - **自适应智能引擎**：自学习阻断特征、Tamper 自适应排序、按 WAF 产品优先选择绕过家族、家族多样性早停
 - **多种输入方式**：支持单URL、批量URL列表、Burp Suite导出文件、Googler JSON文件
 - **多种输出格式**：支持 JSON、YAML、CSV 格式化输出
 - **数据库缓存**：自动缓存检测结果，避免重复扫描
 - **代理支持**：支持 HTTP/HTTPS/SOCKS 代理和 Tor 网络
+- **Cookie 持久化**：Session 连接池 + Cookie Jar 导入/导出，支持 cf_clearance 等 Challenge Cookie 复用
 - **多线程扫描**：支持并发请求，提高扫描效率
 - **自定义Payload**：支持自定义攻击载荷
-- **指纹识别**：支持保存和导出WAF指纹
+- **指纹识别**：支持保存和导出WAF指纹，`--tls-fingerprint` 自检客户端 JA3/JA4
 - **Web服务器识别**：自动识别后端Web服务器类型
 - **POST请求支持**：支持GET和POST两种请求方式
 - **流量记录**：支持将HTTP请求流量保存到文件
@@ -211,8 +217,11 @@ python wafbypass -u "https://target.com/?q=test" -p "' UNION SELECT NULL--" \
 git clone https://github.com/hnytgl/wafbypass.git
 cd wafbypass
 
-# 安装
+# 基础安装
 python -m pip install .
+
+# 完整安装（含 TLS 指纹伪装 + Tor 支持）
+python -m pip install ".[impersonate,tor]"
 ```
 
 ### 方式二：直接运行
@@ -232,7 +241,7 @@ cd wafbypass
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
 # venv\Scripts\activate   # Windows
-python -m pip install .
+python -m pip install ".[impersonate,tor]"
 wafbypass --help
 ```
 
@@ -240,8 +249,9 @@ wafbypass --help
 
 - Python 3.9+
 - pip 包管理器
+- （可选）curl_cffi - 用于 TLS 指纹伪装（`pip install wafbypass[impersonate]`）
 - （可选）Tor - 用于匿名扫描
-- （可选）PySocks - 用于SOCKS代理支持
+- （可选）PySocks - 用于SOCKS代理支持（`pip install wafbypass[tor]`）
 
 ---
 
@@ -364,12 +374,17 @@ python wafbypass -u https://example.com/ --traffic traffic.log
 | `--verbose` | 详细输出模式 |
 | `--hide` | 隐藏Banner |
 | `--update` | 更新到最新版本 |
+| `--no-update-check` | 跳过启动版本检查（也可设置环境变量 `WAFBYPASS_NO_UPDATE_CHECK=1`） |
 | `--skip` | 跳过绕过检测，仅识别防火墙 |
-| `--verify-num INT` | 验证无防火墙时的请求次数 |
+| `--verify-num INT` | 验证无防火墙时的请求次数（默认5） |
 | `-W, --determine-webserver` | 识别后端Web服务器 |
 | `--wafs` | 列出可检测的所有防火墙 |
 | `--tampers` | 列出所有可用的绕过脚本 |
 | `--tamper-profiles` | 列出自动组合链档案 |
+| `--impersonate [TARGET]` | TLS 指纹伪装（需 curl_cffi）。目标：chrome120/chrome131/safari17_0/firefox135/edge101 等，不带值默认 chrome120 |
+| `--tls-fingerprint` | 显示客户端自身 JA3/JA4/HTTP2 指纹后退出，诊断 TLS 层拦截 |
+| `--cookie-jar FILE` | 扫描前加载 Netscape 格式 Cookie 文件（如浏览器导出的 cf_clearance） |
+| `--export-cookies FILE` | 扫描结束后导出 Session Cookies 到文件 |
 | `--clean` | 清理WAFBypass的主目录 |
 
 ---
@@ -441,6 +456,49 @@ $ python wafbypass -u https://example.com/?q=test --payload-type xss
 $ python wafbypass --config content/files/example_config.yaml -u https://example.com/
 ```
 
+### 示例8：TLS 指纹伪装绕过 Cloudflare
+
+```bash
+# 安装 curl_cffi 支持
+$ pip install wafbypass[impersonate]
+
+# 使用 Chrome 120 TLS 指纹扫描（绕过 JA3 层拦截）
+$ python wafbypass -u https://target.com/?id=1 --impersonate chrome120
+
+# 使用 Safari 指纹
+$ python wafbypass -u https://target.com/ --impersonate safari17_0
+```
+
+### 示例9：诊断 TLS 指纹
+
+```bash
+# 查看自身 JA3/JA4 指纹，判断是否被 TLS 层标记
+$ python wafbypass --tls-fingerprint
+
+============================================================
+  CLIENT TLS/HTTP FINGERPRINT
+============================================================
+  JA3 hash:    cd08e31494f9531f560d64c695473da9
+  JA4:         t13d1516h2_8daaf6152771_b186095e22b6
+  HTTP/2:      akamai=1:65536,2:0,4:6291456,6:262144|15663105|0|m,a,s,p
+  User-Agent:  Mozilla/5.0 (Windows NT 10.0; Win64; x64) ...
+  TLS version: TLSv1.3
+============================================================
+```
+
+### 示例10：使用浏览器 Cookie 绕过 JS Challenge
+
+```bash
+# 从浏览器导出 cf_clearance cookie（Netscape 格式）
+# 推荐扩展：EditThisCookie / Get cookies.txt LOCALLY
+
+# 导入 cookie 后扫描
+$ python wafbypass -u https://target.com/ --cookie-jar cookies.txt
+
+# 扫描结束后导出 session cookies（含运行中新获取的）
+$ python wafbypass -u https://target.com/ --export-cookies session.txt
+```
+
 ---
 
 ## Docker 部署
@@ -507,11 +565,15 @@ A: 在 `content/tampers/` 目录下创建新的Python文件，遵循现有的脚
 - 新增 26 个WAF检测插件（AWS v2, Azure, GCP, Tencent, Huawei, 奇安信, 山石, 安恒, 启明, 天融信, 火山引擎等），总计112+
 - 新增绕过脚本与受预算约束的组合链引擎，总计81个脚本
 - 自适应智能引擎（自学习阻断签名、Tamper 自适应排序、WAF 家族提示、多样性早停）
+- TLS 指纹伪装（curl_cffi 后端，支持 30+ 浏览器指纹目标）
+- 客户端 JA3/JA4 自检诊断（`--tls-fingerprint`）
+- Cookie Jar 导入/导出（cf_clearance 等 Challenge Cookie 复用）
 - 智能检测置信度评分与智能报告分析
 - Payload分片绕过技术套件（7项分片策略）
 - HTML专业报告生成（`--html-report`）
 - 6类Payload分类库（SQLi/XSS/XXE/SSTI/LFI/CMDi）
 - YAML配置文件支持
-- 核心引擎现代化改造（Session管理, 连接池, 重试机制）
+- 核心引擎现代化改造（Session 连接池、cookie 持久化、response 生命周期管理）
+- 安全加固（yaml.safe_load、移除动态代码执行、TLS_VERIFY 全局一致）
 - 更丰富的Payload集合（40+条）
 - 完整的中文文档
