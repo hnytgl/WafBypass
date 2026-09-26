@@ -275,6 +275,20 @@ class WAFBypassParser(ArgumentParser):
                           help="Output a list of tamper script load paths with their description")
         misc.add_argument("--tamper-profiles", action="store_true", dest="listTamperProfiles",
                           help="Output the built-in automatic tamper-chain profiles")
+        misc.add_argument("--impersonate", dest="impersonate", metavar="TARGET", nargs="?",
+                          const="chrome120", default=None,
+                          help="Impersonate a browser TLS fingerprint (requires curl_cffi). "
+                               "Targets: chrome120, chrome131, safari17_0, firefox135, edge101, etc. "
+                               "Pass without value to use chrome120. "
+                               "Install with: pip install wafbypass[impersonate]")
+        misc.add_argument("--tls-fingerprint", dest="showFingerprint", action="store_true", default=False,
+                          help="Display this client's TLS/HTTP fingerprint (JA3/JA4) and exit. "
+                               "Useful to diagnose whether the target blocks you at the TLS layer.")
+        misc.add_argument("--cookie-jar", dest="cookieJar", metavar="FILE",
+                          help="Load cookies from a Netscape-format cookie file before scanning "
+                               "(e.g. cf_clearance exported from browser)")
+        misc.add_argument("--export-cookies", dest="exportCookies", metavar="FILE",
+                          help="Export session cookies to a Netscape-format file after scanning")
 
         hidden = parser.add_argument_group()
         hidden.add_argument("--clean", action="store_true", dest="cleanHomeFolder", help=SUPPRESS)

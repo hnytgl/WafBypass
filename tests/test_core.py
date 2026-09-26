@@ -108,6 +108,7 @@ class RequestTests(unittest.TestCase):
         response.headers = {}
         with mock.patch("lib.settings._get_session") as mock_session_fn:
             mock_session = mock.Mock()
+            mock_session.backend = "requests"
             mock_session.get.return_value = response
             mock_session_fn.return_value = mock_session
             settings.get_page("https://example.test/")
@@ -120,6 +121,7 @@ class RequestTests(unittest.TestCase):
         try:
             with mock.patch("lib.settings._get_session") as mock_session_fn:
                 mock_session = mock.Mock()
+                mock_session.backend = "requests"
                 mock_session.get.return_value = response
                 mock_session_fn.return_value = mock_session
                 settings.get_page("https://example.test/")
