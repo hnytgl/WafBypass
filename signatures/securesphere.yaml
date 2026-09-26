@@ -1,0 +1,24 @@
+schema_version: 1
+product: Imperva SecureSphere (Imperva)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: <h2>error<.h2>
+    fields: &id001
+    - body
+  - regex: <title>error<.title>
+    fields: *id001
+  - regex: <b>error<.b>
+    fields: *id001
+  - regex: <td.class="(errormessage|error)".height="[0-9]{1,3}".width="[0-9]{1,3}">
+    fields: *id001
+  - regex: the.incident.id.(is|number.is).
+    fields: *id001
+  - regex: page.cannot.be.displayed
+    fields: *id001
+  - regex: contact.support.for.additional.information
+    fields: *id001
+tamper_hints:
+- encoding
+- keyword
+confidence: high

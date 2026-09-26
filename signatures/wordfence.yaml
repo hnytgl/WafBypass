@@ -1,0 +1,18 @@
+schema_version: 1
+product: Wordfence (Feedjit)
+version: '2026.09'
+tags:
+- wordpress
+detection:
+  patterns:
+  - regex: generated.by.wordfence
+    fields: &id001
+    - body
+  - regex: your.access.to.this.site.has.been.limited
+    fields: *id001
+  - regex: <.+>wordfence<.+.>
+    fields: *id001
+tamper_hints:
+- case
+- keyword
+confidence: high

@@ -1,0 +1,20 @@
+schema_version: 1
+product: Varnish/CacheWall WAF
+version: '2026.09'
+detection:
+  patterns:
+  - regex: \bxid. \d+
+    fields: &id001
+    - body
+    - server
+    - via
+    - x-varnish
+  - regex: varnish\Z
+    fields: *id001
+  - regex: varnish
+    fields: *id001
+  - regex: <.+>(.)?security.by.cachewall(.)?<.+.>
+    fields: *id001
+  - regex: cachewall
+    fields: *id001
+confidence: high

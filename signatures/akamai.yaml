@@ -1,0 +1,25 @@
+schema_version: 1
+product: AkamaiGHost Website Protection (Akamai Global Host)
+version: '2026.09'
+tags:
+- cdn
+- cloud
+detection:
+  patterns:
+  - regex: akamaighost
+    fields: &id001
+    - body
+    - server
+    - set-cookie
+  - regex: you.don.t.have.permission.to.access
+    fields: *id001
+  - regex: <.+>access.denied<.+.>
+    fields: *id001
+  - regex: akamaighost
+    fields: *id001
+  - regex: ak.bmsc.
+    fields: *id001
+tamper_hints:
+- whitespace
+- encoding
+confidence: high

@@ -1,0 +1,47 @@
+schema_version: 1
+product: Fastly WAF (Fastly)
+version: '2026.09'
+tags:
+- cdn
+detection:
+  patterns:
+  - regex: fastly
+    fields: &id001
+    - body
+    - server
+    - via
+    - x-cache
+    - x-served-by
+  - regex: x-served-by
+    fields: *id001
+  - regex: x-cache-hits
+    fields: *id001
+  - regex: x-timer
+    fields: *id001
+  contains:
+  - value: blocked
+    field: body
+  status_rules:
+  - status:
+    - 403
+    - 406
+    patterns:
+    - regex: fastly
+      fields:
+      - server
+      - via
+      - x-cache
+      - x-served-by
+    - regex: x-served-by
+      fields:
+      - server
+      - via
+      - x-cache
+      - x-served-by
+    - regex: x-cache-hits
+      fields:
+      - server
+      - via
+      - x-cache
+      - x-served-by
+confidence: medium

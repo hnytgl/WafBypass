@@ -1,0 +1,39 @@
+schema_version: 1
+product: CloudFlare Web Application Firewall (CloudFlare)
+version: '2026.09'
+tags:
+- cdn
+- challenge
+- cloud
+detection:
+  header_presence:
+  - cf-ray
+  patterns:
+  - regex: cloudflare.ray.id.|var.cloudflare.
+    fields: &id001
+    - body
+    - cf-ray
+    - cookie
+    - expect-ct
+    - server
+    - set-cookie
+  - regex: cloudflare.nginx
+    fields: *id001
+  - regex: ..cfduid=([a-z0-9]{43})?
+    fields: *id001
+  - regex: cf[-|_]ray(..)?([0-9a-f]{16})?[-|_]?(dfw|iad)?
+    fields: *id001
+  - regex: <title>attention.required.(...)?cloudflare</title>
+    fields: *id001
+  - regex: http(s)?.//report.(uri.)?cloudflare.com(/cdn.cgi(.beacon/expect.ct)?)?
+    fields: *id001
+  - regex: ray.id
+    fields: *id001
+  contains:
+  - value: __cfuid
+    field: set-cookie
+tamper_hints:
+- encoding
+- keyword
+- whitespace
+confidence: high

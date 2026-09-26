@@ -1,0 +1,30 @@
+schema_version: 1
+product: Hillstone WAF (Hillstone Networks/山石网科)
+version: '2026.09'
+tags:
+- chinese
+detection:
+  match_all_headers: true
+  patterns:
+  - regex: hillstone
+    fields: &id001
+    - body
+    - server
+  - regex: stonewaf
+    fields: *id001
+  - regex: 山石
+    fields: *id001
+  status_rules:
+  - status:
+    - 403
+    patterns:
+    - regex: hillstone
+      fields:
+      - server
+    - regex: stonewaf
+      fields:
+      - server
+    - regex: 山石
+      fields:
+      - server
+confidence: medium

@@ -1,0 +1,11 @@
+schema_version: 1
+product: Anquanbao Web Application Firewall (Anquanbao)
+version: '2026.09'
+tags:
+- chinese
+detection:
+  patterns:
+  - regex: .aqb_cc.error.
+    fields:
+    - body
+confidence: high

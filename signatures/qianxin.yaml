@@ -1,0 +1,35 @@
+schema_version: 1
+product: Qianxin WAF (QiAnXin/奇安信)
+version: '2026.09'
+tags:
+- chinese
+detection:
+  match_all_headers: true
+  patterns:
+  - regex: qianxin
+    fields: &id001
+    - body
+  - regex: qax
+    fields: *id001
+  - regex: qianxin-waf
+    fields: *id001
+  - regex: 奇安信
+    fields: *id001
+  - regex: 天守
+    fields: *id001
+  status_rules:
+  - status:
+    - 403
+    - 405
+    - 501
+    patterns:
+    - regex: qianxin
+      fields:
+      - body
+    - regex: qax
+      fields:
+      - body
+    - regex: qianxin-waf
+      fields:
+      - body
+confidence: medium

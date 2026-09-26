@@ -1,0 +1,11 @@
+schema_version: 1
+product: Yunsuo Web Application Firewall (Yunsuo)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: <img.class=.yunsuologo.
+    fields: &id001
+    - body
+  - regex: yunsuo.session
+    fields: *id001
+confidence: high

@@ -1,0 +1,16 @@
+schema_version: 1
+product: StrictHttpFirewall (WAF)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: the.request.was.rejected.because.the.url.contained.a.potentially.malicious.string
+    fields:
+    - body
+  status_rules:
+  - status:
+    - 500
+    patterns:
+    - regex: the.request.was.rejected.because.the.url.contained.a.potentially.malicious.string
+      fields:
+      - body
+confidence: medium

@@ -1,0 +1,15 @@
+schema_version: 1
+product: Anti Bot Protection (PerimeterX)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: access.to.this.page.has.been.denied.because.we.believe.you.are.using.automation.tool
+    fields: &id001
+    - body
+  - regex: http(s)?://(www.)?perimeterx.\w+.whywasiblocked
+    fields: *id001
+  - regex: perimeterx
+    fields: *id001
+  - regex: (..)?client.perimeterx.*/[a-zA-Z]{8,15}/*.*.js
+    fields: *id001
+confidence: high

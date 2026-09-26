@@ -1,0 +1,61 @@
+schema_version: 1
+product: Azure Application Gateway WAF (Microsoft)
+version: '2026.09'
+tags:
+- cloud
+detection:
+  patterns:
+  - regex: request has been blocked by the application gateway
+    fields: &id001
+    - body
+    - server
+    - set-cookie
+    - x-ms-request-id
+    - x-powered-by
+  - regex: microsoft-azure-application-gateway
+    fields: *id001
+  - regex: x-ms-request-id
+    fields: *id001
+  - regex: azure web application firewall
+    fields: *id001
+  - regex: x-azure-ref
+    fields: *id001
+  status_rules:
+  - status:
+    - 403
+    - 502
+    patterns:
+    - regex: request has been blocked by the application gateway
+      fields:
+      - server
+      - set-cookie
+      - x-ms-request-id
+      - x-powered-by
+    - regex: microsoft-azure-application-gateway
+      fields:
+      - server
+      - set-cookie
+      - x-ms-request-id
+      - x-powered-by
+    - regex: x-ms-request-id
+      fields:
+      - server
+      - set-cookie
+      - x-ms-request-id
+      - x-powered-by
+  conditional:
+  - if_header: x-ms-request-id
+    patterns:
+    - regex: request has been blocked by the application gateway
+      fields:
+      - body
+      - server
+    - regex: microsoft-azure-application-gateway
+      fields:
+      - body
+      - server
+    - regex: x-ms-request-id
+      fields:
+      - body
+      - server
+confidence: medium

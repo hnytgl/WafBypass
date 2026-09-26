@@ -1,0 +1,12 @@
+schema_version: 1
+product: Application Security Manager (F5 Networks)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: the.requested.url.was.rejected..please.consult.with.your.administrator.
+    fields:
+    - body
+tamper_hints:
+- case
+- comment
+confidence: high

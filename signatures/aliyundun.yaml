@@ -1,0 +1,28 @@
+schema_version: 1
+product: AliYunDun (WAF)
+version: '2026.09'
+tags:
+- chinese
+- cloud
+detection:
+  patterns:
+  - regex: error(s)?.aliyun(dun)?.(com|net)
+    fields: &id001
+    - body
+  - regex: http(s)?://(www.)?aliyun.(com|net)
+    fields: *id001
+  status_rules:
+  - status:
+    - 405
+    patterns:
+    - regex: error(s)?.aliyun(dun)?.(com|net)
+      fields:
+      - body
+    - regex: http(s)?://(www.)?aliyun.(com|net)
+      fields:
+      - body
+tamper_hints:
+- encoding
+- literal
+- whitespace
+confidence: medium

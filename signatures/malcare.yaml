@@ -1,0 +1,15 @@
+schema_version: 1
+product: Malcare (MalCare Security WAF)
+version: '2026.09'
+tags:
+- wordpress
+detection:
+  patterns:
+  - regex: malcare
+    fields: &id001
+    - body
+  - regex: <.+>login.protection<.+.><.+>powered.by<.+.>(<.+.>)?((.)?malcare.-.pro|blogvault)?
+    fields: *id001
+  - regex: <.+>firewall<.+.><.+>powered.by<.+.>(<.+.>)?((.)?malcare.-.pro|blogvault)?
+    fields: *id001
+confidence: high

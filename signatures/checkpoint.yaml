@@ -1,0 +1,28 @@
+schema_version: 1
+product: Check Point WAF (Check Point Software)
+version: '2026.09'
+detection:
+  match_all_headers: true
+  patterns:
+  - regex: check.point
+    fields: &id001
+    - body
+    - server
+  - regex: checkpoint
+    fields: *id001
+  - regex: cp_waf
+    fields: *id001
+  status_rules:
+  - status:
+    - 403
+    patterns:
+    - regex: check.point
+      fields:
+      - server
+    - regex: checkpoint
+      fields:
+      - server
+    - regex: cp_waf
+      fields:
+      - server
+confidence: medium

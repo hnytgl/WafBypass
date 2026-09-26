@@ -1,0 +1,11 @@
+schema_version: 1
+product: Bekchy (WAF)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: bekchy.(-.)?access.denied
+    fields: &id001
+    - body
+  - regex: (http(s)?://)(www.)?bekchy.com(/report)?
+    fields: *id001
+confidence: high

@@ -1,0 +1,10 @@
+schema_version: 1
+product: EdgeCast Web Application Firewall (Verizon)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: \Aecdf
+    fields:
+    - body
+    - server
+confidence: high

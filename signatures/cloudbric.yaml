@@ -1,0 +1,22 @@
+schema_version: 1
+product: Cloudbric Web Application Firewall (Cloudbric)
+version: '2026.09'
+detection:
+  match_all_headers: true
+  patterns:
+  - regex: cloudbric
+    fields: &id001
+    - body
+  - regex: x-cloudbric
+    fields: *id001
+  status_rules:
+  - status:
+    - 403
+    patterns:
+    - regex: cloudbric
+      fields:
+      - body
+    - regex: x-cloudbric
+      fields:
+      - body
+confidence: medium

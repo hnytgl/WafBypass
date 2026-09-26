@@ -1,0 +1,10 @@
+schema_version: 1
+product: Stingray Application Firewall (Riverbed/Brocade)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: \AX-Mapping-
+    fields:
+    - body
+    - set-cookie
+confidence: high

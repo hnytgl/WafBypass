@@ -1,0 +1,21 @@
+schema_version: 1
+product: Incapsula Web Application Firewall (Incapsula/Imperva)
+version: '2026.09'
+tags:
+- cdn
+- cloud
+detection:
+  patterns:
+  - regex: incap_ses|visid_incap
+    fields: &id001
+    - body
+    - set-cookie
+    - x-cdn
+  - regex: incapsula
+    fields: *id001
+  - regex: incapsula.incident.id
+    fields: *id001
+tamper_hints:
+- encoding
+- keyword
+confidence: high

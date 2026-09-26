@@ -1,0 +1,17 @@
+schema_version: 1
+product: RSFirewall (Joomla WAF)
+version: '2026.09'
+tags:
+- joomla
+detection:
+  patterns:
+  - regex: com.rsfirewall.403.forbidden
+    fields: &id001
+    - body
+  - regex: com.rsfirewall.event
+    fields: *id001
+  - regex: "(\b)?rsfirewall(\b)?"
+    fields: *id001
+  - regex: rsfirewall
+    fields: *id001
+confidence: high

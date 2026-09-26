@@ -1,0 +1,21 @@
+schema_version: 1
+product: Shadow Daemon Opensource (WAF)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: <h\d{1}>\d{3}.forbidden<.h\d{1}>
+    fields: &id001
+    - body
+  - regex: request.forbidden.by.administrative.rules.
+    fields: *id001
+  status_rules:
+  - status:
+    - 403
+    patterns:
+    - regex: <h\d{1}>\d{3}.forbidden<.h\d{1}>
+      fields:
+      - body
+    - regex: request.forbidden.by.administrative.rules.
+      fields:
+      - body
+confidence: medium

@@ -1,0 +1,20 @@
+schema_version: 1
+product: SonicWALL Firewall (Dell)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: This.request.is.blocked.by.the.SonicWALL
+    fields: &id001
+    - body
+    - server
+  - regex: Dell.SonicWALL
+    fields: *id001
+  - regex: \bDell\b
+    fields: *id001
+  - regex: Web.Site.Blocked.+\bnsa.banner
+    fields: *id001
+  - regex: SonicWALL
+    fields: *id001
+  - regex: <.+>policy.this.site.is.blocked<.+.>
+    fields: *id001
+confidence: high

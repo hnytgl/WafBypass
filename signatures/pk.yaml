@@ -1,0 +1,13 @@
+schema_version: 1
+product: pkSecurityModule (IDS)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: <.+>pkSecurityModule\W..\WSecurity.Alert<.+.>
+    fields: &id001
+    - body
+  - regex: <.+http(s)?.//([w]{3})?.kitnetwork.\w+.+>
+    fields: *id001
+  - regex: <.+>A.safety.critical.request.was.discovered.and.blocked.<.+.>
+    fields: *id001
+confidence: high

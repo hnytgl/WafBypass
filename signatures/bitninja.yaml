@@ -1,0 +1,13 @@
+schema_version: 1
+product: Bitninja (WAF)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: bitninja
+    fields: &id001
+    - body
+  - regex: security.check.by.bitninja
+    fields: *id001
+  - regex: <.+>visitor.anti(\S)?robot.validation<.+.>
+    fields: *id001
+confidence: high

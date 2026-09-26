@@ -1,0 +1,28 @@
+schema_version: 1
+product: Unknown Firewall
+version: '2026.09'
+detection:
+  # Unknown Firewall should ONLY trigger on actual block pages (4xx/5xx),
+  # never on normal 200 responses. The original plugin was designed for
+  # unidentified block pages, not generic keyword matching.
+  status_rules:
+    - status: [403, 406, 501, 999]
+      patterns:
+        - regex: "\\bblocked\\b"
+          fields: [body]
+        - regex: "\\billegal\\b"
+          fields: [body]
+        - regex: "ip.address.logged"
+          fields: [body]
+        - regex: "not.acceptable"
+          fields: [body]
+        - regex: "\\bunauthorized\\b"
+          fields: [body]
+        - regex: "request.*rejected"
+          fields: [body]
+        - regex: "\\bwaf\\b"
+          fields: [body]
+        - regex: "access.denied"
+          fields: [body]
+confidence: low
+false_positive_risk: high

@@ -1,0 +1,11 @@
+schema_version: 1
+product: Instart Logic (Palo Alto)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: instartrequestid
+    fields:
+    - body
+    - x-instart-cachekeymod
+    - x-instart-request-id
+confidence: high

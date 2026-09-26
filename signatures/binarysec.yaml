@@ -1,0 +1,16 @@
+schema_version: 1
+product: BinarySEC Web Application Firewall (BinarySEC)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: x.binarysec.via
+    fields: &id001
+    - body
+    - server
+  - regex: x.binarysec.nocache
+    fields: *id001
+  - regex: binarysec
+    fields: *id001
+  - regex: \bbinarysec\b
+    fields: *id001
+confidence: high

@@ -1,0 +1,16 @@
+schema_version: 1
+product: XSS/CSRF Filtering Protection (CodeIgniter)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: the.uri.you.submitted.has.disallowed.characters
+    fields:
+    - body
+  status_rules:
+  - status:
+    - 400
+    patterns:
+    - regex: the.uri.you.submitted.has.disallowed.characters
+      fields:
+      - body
+confidence: medium

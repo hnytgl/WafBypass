@@ -1,0 +1,23 @@
+schema_version: 1
+product: Sucuri Firewall (Sucuri Cloudproxy)
+version: '2026.09'
+tags:
+- cdn
+- cloud
+detection:
+  patterns:
+  - regex: access.denied.-.sucuri.website.firewall
+    fields: &id001
+    - body
+    - server
+    - x-sucuri-block
+  - regex: sucuri.webSite.firewall.-.cloudProxy.-.access.denied
+    fields: *id001
+  - regex: questions\?.+cloudproxy@sucuri\.net
+    fields: *id001
+  - regex: http(s)?.\/\/(cdn|supportx.)?sucuri(.net|com)?
+    fields: *id001
+tamper_hints:
+- encoding
+- case
+confidence: high

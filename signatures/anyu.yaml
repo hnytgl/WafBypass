@@ -1,0 +1,13 @@
+schema_version: 1
+product: AnYu Web Application Firewall (Anyu Technologies)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: sorry(.)?.your.access.has.been.intercept(ed)?.by.anyu
+    fields: &id001
+    - body
+  - regex: anyu
+    fields: *id001
+  - regex: anyu(-)?.the.green.channel
+    fields: *id001
+confidence: high

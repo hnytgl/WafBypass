@@ -1,0 +1,11 @@
+schema_version: 1
+product: Palo Alto Firewall (Palo Alto Networks)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: has.been.blocked.in.accordance.with.company.policy
+    fields: &id001
+    - body
+  - regex: <.+>Virus.Spyware.Download.Blocked<.+.>
+    fields: *id001
+confidence: high

@@ -1,0 +1,17 @@
+schema_version: 1
+product: Barracuda Web Application Firewall (Barracuda Networks)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: \Abarra.counter.session(=)?
+    fields: &id001
+    - body
+    - set-cookie
+  - regex: (\A|\b)?barracuda.
+    fields: *id001
+  - regex: barracuda.networks(.)?.inc
+    fields: *id001
+tamper_hints:
+- whitespace
+- encoding
+confidence: high

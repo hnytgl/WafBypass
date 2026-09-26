@@ -1,0 +1,11 @@
+schema_version: 1
+product: Chuangyu top government cloud defense platform (WAF)
+version: '2026.09'
+tags:
+- chinese
+detection:
+  patterns:
+  - regex: (http(s)?.//(www.)?)?365cyd.(com|net)
+    fields:
+    - body
+confidence: high

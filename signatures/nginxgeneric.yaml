@@ -1,0 +1,24 @@
+schema_version: 1
+product: Nginx Generic Protection
+version: '2026.09'
+detection:
+  # Only match on error pages, not normal content mentioning "nginx"
+  status_rules:
+    - status: [403, 404, 500, 502]
+      patterns:
+        - regex: "nginx"
+          fields: [server]
+        - regex: "you.do(not|n.t)?.have.permission.to.access.this.document"
+          fields: [body]
+        - regex: "<title>403 Forbidden</title>.*nginx"
+          fields: [body]
+        - regex: "<hr><center>nginx</center>"
+          fields: [body]
+  patterns:
+    # Specific nginx error page markers (not generic "nginx" in body)
+    - regex: "<hr><center>nginx</center>"
+      fields: [body]
+    - regex: "you.do(not|n.t)?.have.permission.to.access.this.document"
+      fields: [body]
+confidence: low
+false_positive_risk: high

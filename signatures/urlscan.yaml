@@ -1,0 +1,12 @@
+schema_version: 1
+product: UrlScan (Microsoft)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: rejected.by.url.scan
+    fields: &id001
+    - body
+    - location
+  - regex: /rejected.by.url.scan
+    fields: *id001
+confidence: high

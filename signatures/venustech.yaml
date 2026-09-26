@@ -1,0 +1,32 @@
+schema_version: 1
+product: Venustech WAF (Venustech/启明星辰)
+version: '2026.09'
+detection:
+  match_all_headers: true
+  patterns:
+  - regex: venustech
+    fields: &id001
+    - body
+    - server
+  - regex: venus
+    fields: *id001
+  - regex: 启明星辰
+    fields: *id001
+  - regex: 天清
+    fields: *id001
+  - regex: tianqing
+    fields: *id001
+  status_rules:
+  - status:
+    - 403
+    patterns:
+    - regex: venustech
+      fields:
+      - server
+    - regex: venus
+      fields:
+      - server
+    - regex: 启明星辰
+      fields:
+      - server
+confidence: medium

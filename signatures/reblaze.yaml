@@ -1,0 +1,38 @@
+schema_version: 1
+product: Reblaze Web Application Firewall (Reblaze)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: reblaze
+    fields: &id001
+    - body
+    - cookie
+    - server
+    - set-cookie
+  - regex: rbzid
+    fields: *id001
+  - regex: rbz-sess
+    fields: *id001
+  contains:
+  - value: rbzid
+    field: cookie
+  status_rules:
+  - status:
+    - 403
+    patterns:
+    - regex: reblaze
+      fields:
+      - cookie
+      - server
+      - set-cookie
+    - regex: rbzid
+      fields:
+      - cookie
+      - server
+      - set-cookie
+    - regex: rbz-sess
+      fields:
+      - cookie
+      - server
+      - set-cookie
+confidence: medium

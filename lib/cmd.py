@@ -308,6 +308,14 @@ class WAFBypassParser(ArgumentParser):
                           help="Output scan results as single-line JSON to stdout "
                                "(logs go to stderr). Enables pipeline integration: "
                                "wafbypass -u X --json-stdout | jq .is_protected")
+        misc.add_argument("--update-signatures", dest="updateSignatures", action="store_true", default=False,
+                          help="Download and install the latest WAF signature pack from GitHub Releases")
+        misc.add_argument("--check-signatures", dest="checkSignatures", action="store_true", default=False,
+                          help="Check if a newer signature pack is available (without downloading)")
+        misc.add_argument("--signature-url", dest="signatureUrl", metavar="URL",
+                          help="Custom URL for signature pack releases API (for internal/enterprise sources)")
+        misc.add_argument("--no-yaml-signatures", dest="noYamlSignatures", action="store_true", default=False,
+                          help="Disable YAML signature engine, fall back to Python plugins only")
 
         hidden = parser.add_argument_group()
         hidden.add_argument("--clean", action="store_true", dest="cleanHomeFolder", help=SUPPRESS)

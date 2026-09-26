@@ -1,0 +1,22 @@
+schema_version: 1
+product: TopSec WAF (TopSec/天融信)
+version: '2026.09'
+detection:
+  match_all_headers: true
+  patterns:
+    - regex: "\\btopsec\\b"
+      fields: [body, server]
+    - regex: "\\btops\\b"
+      fields: [server]
+    - regex: "天融信"
+      fields: [body, server]
+  status_rules:
+    - status: [403, 405]
+      patterns:
+        - regex: "\\btopsec\\b"
+          fields: [server]
+        - regex: "\\btops\\b"
+          fields: [server]
+        - regex: "天融信"
+          fields: [server]
+confidence: medium

@@ -1,0 +1,40 @@
+schema_version: 1
+product: 360 Web Application Firewall (360)
+version: '2026.09'
+tags:
+- chinese
+detection:
+  patterns:
+  - regex: .wzws.waf.cgi.
+    fields: &id001
+    - body
+    - server
+    - x-powered-by-360wzb
+  - regex: wangzhan\.360\.cn
+    fields: *id001
+  - regex: qianxin.waf
+    fields: *id001
+  - regex: 360wzws
+    fields: *id001
+  - regex: transfer.is.blocked
+    fields: *id001
+  status_rules:
+  - status:
+    - 493
+    patterns:
+    - regex: .wzws.waf.cgi.
+      fields:
+      - server
+      - x-powered-by-360wzb
+    - regex: wangzhan\.360\.cn
+      fields:
+      - server
+      - x-powered-by-360wzb
+    - regex: qianxin.waf
+      fields:
+      - server
+      - x-powered-by-360wzb
+tamper_hints:
+- keyword
+- whitespace
+confidence: medium

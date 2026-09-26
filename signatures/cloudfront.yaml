@@ -1,0 +1,15 @@
+schema_version: 1
+product: CloudFront Firewall (Amazon)
+version: '2026.09'
+tags:
+- cdn
+detection:
+  patterns:
+  - regex: '[a-zA-Z0-9]{,60}.cloudfront.net'
+    fields: &id001
+    - body
+  - regex: cloudfront
+    fields: *id001
+  - regex: x.amz.cf.id|nguardx
+    fields: *id001
+confidence: high

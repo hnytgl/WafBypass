@@ -1,0 +1,36 @@
+schema_version: 1
+product: OpenResty WAF (OpenResty/LuaNginx)
+version: '2026.09'
+tags:
+- opensource
+detection:
+  match_all_headers: true
+  patterns:
+  - regex: openresty
+    fields: &id001
+    - body
+    - server
+    - x-powered-by
+  - regex: lua-resty
+    fields: *id001
+  - regex: ngx_waf
+    fields: *id001
+  status_rules:
+  - status:
+    - 403
+    - 405
+    - 406
+    patterns:
+    - regex: openresty
+      fields:
+      - server
+      - x-powered-by
+    - regex: lua-resty
+      fields:
+      - server
+      - x-powered-by
+    - regex: ngx_waf
+      fields:
+      - server
+      - x-powered-by
+confidence: medium

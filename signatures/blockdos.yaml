@@ -1,0 +1,10 @@
+schema_version: 1
+product: BlockDos DDoS protection (BlockDos)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: blockdos\.net
+    fields:
+    - body
+    - server
+confidence: high

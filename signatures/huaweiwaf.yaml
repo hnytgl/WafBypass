@@ -1,0 +1,35 @@
+schema_version: 1
+product: Huawei Cloud WAF (Huawei)
+version: '2026.09'
+tags:
+- chinese
+- cloud
+detection:
+  match_all_headers: true
+  patterns:
+  - regex: huawei
+    fields: &id001
+    - body
+    - server
+  - regex: hwwaf
+    fields: *id001
+  - regex: huaweicloud waf
+    fields: *id001
+  status_rules:
+  - status:
+    - 403
+    - 418
+    patterns:
+    - regex: huawei
+      fields:
+      - server
+    - regex: hwwaf
+      fields:
+      - server
+    - regex: huaweicloud waf
+      fields:
+      - server
+tamper_hints:
+- encoding
+- whitespace
+confidence: medium

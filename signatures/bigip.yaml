@@ -1,0 +1,25 @@
+schema_version: 1
+product: BIG-IP (F5 Networks)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: \ATS\w{4,}=
+    fields: &id001
+    - body
+    - cookie
+    - server
+    - set-cookie
+  - regex: bigipserver(.i)?|bigipserverinternal
+    fields: *id001
+  - regex: \AF5\Z
+    fields: *id001
+  - regex: ^TS[a-zA-Z0-9]{3,8}=
+    fields: *id001
+  - regex: BigIP|BIG-IP|BIGIP
+    fields: *id001
+  - regex: bigipserver
+    fields: *id001
+tamper_hints:
+- case
+- comment
+confidence: high

@@ -1,0 +1,12 @@
+schema_version: 1
+product: IBM Security Access Manager (WebSEAL)
+version: '2026.09'
+detection:
+  patterns:
+  - regex: webseal.error.message.template
+    fields: &id001
+    - body
+    - server
+  - regex: webseal.server.received.an.invalid.http.request
+    fields: *id001
+confidence: high

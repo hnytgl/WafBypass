@@ -750,9 +750,46 @@ def detection_main(url, payloads, cursor, **kwargs):
     final_headers = {}
 
     lib.formatter.info("loading firewall detection scripts")
-    loaded_plugins = ScriptQueue(
+
+    # Load YAML signature engine (preferred: declarative, no code execution)
+    sig_engine = None
+    use_yaml = not kwargs.get("no_yaml_signatures", False)
+    if use_yaml:
+        try:
+            from lib.signature_loader import SignatureEngine
+            sig_engine = SignatureEngine(verbose=verbose)
+            sig_engine.load_builtin()
+            sig_engine.load_user()
+            if sig_engine.count > 0:
+                lib.formatter.info("loaded {} YAML signatures".format(sig_engine.count))
+            else:
+                sig_engine = None
+        except Exception as e:
+            if verbose:
+                lib.formatter.debug("YAML signature engine unavailable: {}".format(e))
+            sig_engine = None
+
+    # Load Python plugins as fallback (only for products NOT covered by YAML signatures)
+    all_plugins = ScriptQueue(
         lib.settings.PLUGINS_DIRECTORY, lib.settings.PLUGINS_IMPORT_TEMPLATE, verbose=verbose
     ).load_scripts()
+
+    # Filter out plugins whose product is already covered by the YAML engine
+    if sig_engine is not None:
+        yaml_products = set(sig_engine.products)
+        loaded_plugins = [
+            p for p in all_plugins
+            if getattr(p, "__product__", None) not in yaml_products
+        ]
+        skipped = len(all_plugins) - len(loaded_plugins)
+        if verbose and skipped:
+            lib.formatter.debug(
+                "{} Python plugins skipped (covered by YAML signatures), {} fallback plugins active".format(
+                    skipped, len(loaded_plugins)
+                )
+            )
+    else:
+        loaded_plugins = all_plugins
 
     lib.formatter.info("running firewall detection checks")
     temp = []
@@ -762,6 +799,18 @@ def detection_main(url, payloads, cursor, **kwargs):
     for item in responses:
         item = item if item is not None else normal_response
         _, status, html, headers = item
+
+        # Phase 1: YAML signature engine (fast, safe, no code execution)
+        yaml_matched_products = set()
+        if sig_engine is not None:
+            yaml_results = sig_engine.detect(str(html), headers=headers, status=status)
+            for result in yaml_results:
+                yaml_matched_products.add(result.product)
+                temp.append(result.product)
+                match_counts[result.product] = match_counts.get(result.product, 0) + 1
+                match_statuses.setdefault(result.product, set()).add(status)
+
+        # Phase 2: Python plugin fallback (only plugins not covered by YAML)
         for detection in loaded_plugins:
             if verbose:
                 lib.formatter.debug("running {}".format(detection))
