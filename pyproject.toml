@@ -11,9 +11,9 @@ requires-python = ">=3.9"
 license = "GPL-3.0-only"
 authors = [{ name = "hnytgl" }]
 dependencies = [
-    "beautifulsoup4>=4.12.0",
-    "requests>=2.31.0",
-    "PyYAML>=6.0",
+    "beautifulsoup4>=4.12.0,<5",
+    "requests>=2.31.0,<3",
+    "PyYAML>=6.0,<7",
 ]
 keywords = ["waf", "security-testing", "web-security"]
 classifiers = [
@@ -24,12 +24,14 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Security",
 ]
 
 [project.optional-dependencies]
+tor = ["PySocks>=1.7.1"]
 socks = ["PySocks>=1.7.1"]
-dev = ["build>=1.2", "pytest>=8.0"]
+dev = ["build>=1.2", "pytest>=8.0", "ruff>=0.4", "mypy>=1.10", "bandit>=1.7", "pip-audit>=2.7"]
 
 [project.scripts]
 wafbypass = "trigger.main:main"
@@ -50,3 +52,20 @@ content = ["files/*"]
 
 [tool.setuptools.exclude-package-data]
 "*" = ["__pycache__/*", "*.pyc", "*.pyo"]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 120
+
+[tool.ruff.lint]
+# Enable real error detection; skip style/upgrade rules that would
+# require reformatting the entire pre-existing codebase.
+select = ["E", "F", "W"]
+ignore = ["E501", "E731", "E741"]  # line length, lambda assignment, ambiguous names
+
+[tool.ruff.lint.per-file-ignores]
+# Plugin/tamper files are community-contributed with pre-existing style debt;
+# only catch real errors (F821 undefined name, F811 redefinition) there.
+"content/*" = ["E722", "E731", "W605", "W292", "F401", "F841"]
+"content/plugins/*" = ["E722", "E731", "W605", "W292", "F401", "F841"]
+"content/tampers/*" = ["E722", "E731", "W605", "W292", "F401", "F841"]

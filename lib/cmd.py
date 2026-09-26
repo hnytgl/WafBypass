@@ -107,8 +107,8 @@ class WAFBypassParser(ArgumentParser):
                               help="Send a POST request (*default=GET)")
         req_args.add_argument("-D", "--data", dest="postRequestData", metavar="POST-STRING",
                               help="Send this data with the POST request (*default=random)")
-        req_args.add_argument("-t", "--threads", dest="threaded", metavar="threaded", type=int,
-                              help="Send requests in parallel (specify number of threads (*default=1)")
+        req_args.add_argument("-t", "--threads", dest="threaded", metavar="threaded", type=int, default=1,
+                              help="Send requests in parallel (specify number of threads, default=1)")
         req_args.add_argument("-tP", "--tor-port", type=int, default=9050, dest="configTorPort",
                               help="Change the port that Tor runs on (*default=9050)")
         req_args.add_argument("-T", "--test", dest="testTargetConnection", default=True, action="store_false",
@@ -119,7 +119,7 @@ class WAFBypassParser(ArgumentParser):
         encoding_opts.add_argument("-e", "--encode", dest="encodePayload", nargs="+",
                                    metavar=("PAYLOAD", "TAMPER-SCRIPT-LOAD-PATH"),
                                    help="Encode a provided payload using provided tamper script(s) "
-                                        "you are able to payy multiple tamper script load paths to "
+                                        "you are able to pass multiple tamper script load paths to "
                                         "this argument and the payload will be tampered as requested")
         encoding_opts.add_argument("-el", "--encode-list", dest="encodePayloadList", nargs=2,
                                    metavar=("PATH", "TAMPER-SCRIPT-LOAD-PATH"),
@@ -219,7 +219,7 @@ class WAFBypassParser(ArgumentParser):
         database_arguments.add_argument(
             "-uC", "--view-url-cache", default=False, action="store_true", dest="viewUrlCache",
             help="Display all the URL cache inside of the database, this includes the netlock, "
-                 "tamper scipts, webserver, and identified protections"
+                 "tamper scripts, webserver, and identified protections"
         )
         database_arguments.add_argument(
             "-pC", "--payload-cache", action="store_true", default=False, dest="viewCachedPayloads",
@@ -237,7 +237,7 @@ class WAFBypassParser(ArgumentParser):
         )
 
         wizard = parser.add_argument_group("wizard arguments",
-                                           "arguemnts that have to do with building scripts")
+                                           "arguments that have to do with building scripts")
         wizard.add_argument(
             "--waf-wizard", action="store_true", default=False, dest="buildWafScript",
             help=SUPPRESS
@@ -255,18 +255,20 @@ class WAFBypassParser(ArgumentParser):
                           help="Hide the banner during the run")
         misc.add_argument("--update", dest="updateWAFBypass", action="store_true",
                           help="Update WAFBypass to the newest development version")
+        misc.add_argument("--no-update-check", dest="noUpdateCheck", action="store_true", default=False,
+                          help="Skip the startup version check (also settable via WAFBYPASS_NO_UPDATE_CHECK=1)")
         misc.add_argument("--save", dest="saveEncodedPayloads", metavar="FILENAME",
                           help="Save the encoded payloads into a file")
         misc.add_argument("--config", dest="configFile", metavar="CONFIG-YAML",
                           help="Load scan configuration from a YAML file")
         misc.add_argument("--skip", dest="skipBypassChecks", action="store_true",
                           help="Skip checking for bypasses and just identify the firewall")
-        misc.add_argument("--verify-num", dest="verifyNumber", metavar="INT", type=int,
-                          help="Change the request amount to verify if there really is not a WAF present"
-                               "(*default=5)")
+        misc.add_argument("--verify-num", dest="verifyNumber", metavar="INT", type=int, default=5,
+                          help="Change the request amount to verify if there really is not a WAF present "
+                               "(default=5)")
         misc.add_argument("-W", "--determine-webserver", action="store_true", default=False, dest="determineWebServer",
                           help="Attempt to determine what web server is running on the backend "
-                               "(IE Apache, Nginx, etc.. *default=False)")
+                               "(IE Apache, Nginx, etc.. default=False)")
         misc.add_argument("--wafs", action="store_true", default=False, dest="viewPossibleWafs",
                           help="Output a list of possible firewalls that can be detected by WAFBypass")
         misc.add_argument("--tampers", action="store_true", dest="listEncodingTechniques",

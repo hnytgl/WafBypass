@@ -1,7 +1,6 @@
 import os
 import sys
 import time
-import shlex
 import subprocess
 
 from lib.cmd import WAFBypassParser
@@ -23,7 +22,6 @@ from lib.settings import (
     check_version,
     get_encoding_list,
     test_target_connection,
-    parse_help_menu,
     export_payloads,
     PLUGINS_DIRECTORY,
     TAMPERS_DIRECTORY,
@@ -48,10 +46,29 @@ from lib.database import (
 )
 
 
-try:
-    raw_input
-except Exception:
-    raw_input = input
+def _detection_kwargs(opt, request_type, payload_list, cursor, agent, proxy):
+    """
+    Build the common kwargs dict for detection_main() calls.
+    Eliminates 20+ duplicated keyword arguments across 3 call sites.
+    """
+    return dict(
+        agent=agent, proxy=proxy,
+        verbose=opt.runInVerbose, skip_bypass_check=opt.skipBypassChecks,
+        verification_number=opt.verifyNumber, formatted=opt.formatOutput,
+        tamper_int=opt.amountOfTampersToDisplay, use_json=opt.sendToJSON,
+        use_yaml=opt.sendToYAML, use_csv=opt.sendToCSV,
+        fingerprint_waf=opt.saveFingerprints, provided_headers=opt.extraHeaders,
+        traffic_file=opt.trafficFile, throttle=opt.sleepTimeThrottle,
+        req_timeout=opt.requestTimeout, post_data=opt.postRequestData,
+        request_type=request_type, check_server=opt.determineWebServer,
+        threaded=opt.threaded, force_file_creation=opt.forceFileCreation,
+        save_copy_of_file=opt.outputDirectory, html_report=opt.htmlReport,
+        tamper_profile=opt.tamperProfile, tamper_chain_depth=opt.tamperChainDepth,
+        tamper_chain_budget=opt.tamperChainBudget, tamper_variants=opt.tamperVariants,
+        tamper_seed=opt.tamperSeed, payload_type=opt.payloadType,
+        adaptive_bypass=opt.adaptiveBypass, bypass_families=opt.bypassFamilies,
+        detection_depth=opt.detectionDepth
+    )
 
 
 def main():
@@ -61,8 +78,7 @@ def main():
     if not len(sys.argv) > 1:
         error("you failed to provide an option, redirecting to help menu")
         time.sleep(2)
-        cmd = "wafbypass --help"
-        subprocess.call(shlex.split(cmd))
+        WAFBypassParser().cmd_parser().print_help()
         exit(0)
 
     # if you feel that you have to many folders or files in the wafbypass home folder
@@ -80,7 +96,7 @@ def main():
                 "your mind press CNTRL-C now".format(home=HOME)
             )
             # you have three seconds to change your mind
-            raw_input("")
+            input("")
             info("attempting to clean home folder")
             shutil.rmtree(HOME)
             info("home folder removed")
@@ -101,9 +117,7 @@ def main():
             warn(
                 "there appears to be no payloads stored in the database, to create payloads use the following options:"
             )
-            proc = subprocess.check_output(["python", "wafbypass", "--help"])
-            parsed_help = parse_help_menu(str(proc), "encoding options:", "output options:")
-            print(parsed_help)
+            WAFBypassParser().cmd_parser().print_help()
         exit(1)
 
     if opt.viewAllCache:
@@ -120,9 +134,7 @@ def main():
             warn(
                 "there appears to be no payloads stored in the database, to create payloads use the following options:"
             )
-            proc = subprocess.check_output(["python", "wafbypass", "--help"])
-            parsed_help = parse_help_menu(proc, "encoding options:", "output options:")
-            print(parsed_help)
+            WAFBypassParser().cmd_parser().print_help()
         exit(0)
 
     if opt.viewUrlCache:
@@ -181,8 +193,8 @@ def main():
 
     if opt.updateWAFBypass:
         info("update in progress")
-        cmd = shlex.split("git pull origin master")
-        subprocess.call(cmd)
+        from lib.settings import CUR_DIR
+        subprocess.call(["git", "-C", CUR_DIR, "pull", "--ff-only", "origin", "master"])
         exit(0)
 
     if not opt.hideBanner:
@@ -191,10 +203,13 @@ def main():
             from lib.settings import CUR_DIR, HOME
             try:
                 with open("{}/content/files/teapot.txt".format(CUR_DIR)) as data:
-                    print("\n" + base64.b64decode(data.read()) + "\n")
-            except:
-                with open("{}/files/teapot.txt".format(HOME)) as data:
-                    print("\n" + base64.b64decode(data.read()) + "\n")
+                    print("\n" + base64.b64decode(data.read()).decode("utf-8", errors="replace") + "\n")
+            except (IOError, OSError):
+                try:
+                    with open("{}/files/teapot.txt".format(HOME)) as data:
+                        print("\n" + base64.b64decode(data.read()).decode("utf-8", errors="replace") + "\n")
+                except (IOError, OSError):
+                    warn("teapot file not found")
         else:
             print(
                 BANNER.format(
@@ -244,11 +259,12 @@ def main():
         info("WAFBypass can detect a total of {} web application protection systems".format(len(wafs_list)))
         exit(0)
 
-    # gotta find a better way to check for updates so ima hotfix it
-    info("checking for updates")
-    is_newest = check_version(speak=False)
-    if not is_newest:
-        warn("there is an update available for wafbypass", minor=True)
+    # check for updates (skippable via --no-update-check or env var)
+    if not getattr(opt, "noUpdateCheck", False) and not os.environ.get("WAFBYPASS_NO_UPDATE_CHECK"):
+        info("checking for updates")
+        is_newest = check_version(speak=False)
+        if is_newest is False:
+            warn("there is an update available for wafbypass", minor=True)
 
     format_opts = [opt.sendToYAML, opt.sendToCSV, opt.sendToJSON]
     if opt.formatOutput:
@@ -284,7 +300,7 @@ def main():
     # do a little check to make sure you have it installed
     if opt.runBehindTor or opt.runBehindProxy is not None and "socks" in opt.runBehindProxy:
         try:
-            import socks
+            import socks  # noqa: F401
         except ImportError:
             # if you don't we will go ahead and exit the system with an error message
             error(
@@ -423,22 +439,8 @@ def main():
 
             info("running single web application '{}'".format(url_to_use))
             detection_main(
-                url_to_use, payload_list, cursor, agent=agent, proxy=proxy,
-                verbose=opt.runInVerbose, skip_bypass_check=opt.skipBypassChecks,
-                verification_number=opt.verifyNumber, formatted=opt.formatOutput,
-                tamper_int=opt.amountOfTampersToDisplay, use_json=opt.sendToJSON,
-                use_yaml=opt.sendToYAML, use_csv=opt.sendToCSV,
-                fingerprint_waf=opt.saveFingerprints, provided_headers=opt.extraHeaders,
-                traffic_file=opt.trafficFile, throttle=opt.sleepTimeThrottle,
-                req_timeout=opt.requestTimeout, post_data=opt.postRequestData,
-                request_type=request_type, check_server=opt.determineWebServer,
-                threaded=opt.threaded, force_file_creation=opt.forceFileCreation,
-                save_copy_of_file=opt.outputDirectory, html_report=opt.htmlReport,
-                tamper_profile=opt.tamperProfile, tamper_chain_depth=opt.tamperChainDepth,
-                tamper_chain_budget=opt.tamperChainBudget, tamper_variants=opt.tamperVariants,
-                tamper_seed=opt.tamperSeed, payload_type=opt.payloadType,
-                adaptive_bypass=opt.adaptiveBypass, bypass_families=opt.bypassFamilies,
-                detection_depth=opt.detectionDepth
+                url_to_use, payload_list, cursor,
+                **_detection_kwargs(opt, request_type, payload_list, cursor, agent, proxy)
             )
         elif any(o is not None for o in [opt.runMultipleWebsites, opt.burpRequestFile]):
             info("reading from '{}'".format(opt.runMultipleWebsites or opt.burpRequestFile))
@@ -500,22 +502,8 @@ def main():
 
                 info("currently running on site #{} ('{}')".format(i, url))
                 detection_main(
-                    url, payload_list, cursor, agent=agent, proxy=proxy,
-                    verbose=opt.runInVerbose, skip_bypass_check=opt.skipBypassChecks,
-                    verification_number=opt.verifyNumber, formatted=opt.formatOutput,
-                    tamper_int=opt.amountOfTampersToDisplay, use_json=opt.sendToJSON,
-                    use_yaml=opt.sendToYAML, use_csv=opt.sendToCSV,
-                    fingerprint_waf=opt.saveFingerprints, provided_headers=opt.extraHeaders,
-                    traffic_file=opt.trafficFile, throttle=opt.sleepTimeThrottle,
-                    req_timeout=opt.requestTimeout, post_data=opt.postRequestData,
-                    request_type=request_type, check_server=opt.determineWebServer,
-                    threaded=opt.threaded, force_file_creation=opt.forceFileCreation,
-                    save_copy_of_file=opt.outputDirectory, html_report=opt.htmlReport,
-                    tamper_profile=opt.tamperProfile, tamper_chain_depth=opt.tamperChainDepth,
-                    tamper_chain_budget=opt.tamperChainBudget, tamper_variants=opt.tamperVariants,
-                    tamper_seed=opt.tamperSeed, payload_type=opt.payloadType,
-                    adaptive_bypass=opt.adaptiveBypass, bypass_families=opt.bypassFamilies,
-                    detection_depth=opt.detectionDepth
+                    url, payload_list, cursor,
+                    **_detection_kwargs(opt, request_type, payload_list, cursor, agent, proxy)
                 )
                 time.sleep(0.5)
 
@@ -558,22 +546,8 @@ def main():
 
                         info("currently running on '{}' (site #{})".format(url, i))
                         detection_main(
-                            url, payload_list, cursor, agent=agent, proxy=proxy,
-                            verbose=opt.runInVerbose, skip_bypass_check=opt.skipBypassChecks,
-                            verification_number=opt.verifyNumber, formatted=opt.formatOutput,
-                            tamper_int=opt.amountOfTampersToDisplay, use_json=opt.sendToJSON,
-                            use_yaml=opt.sendToYAML, use_csv=opt.sendToCSV,
-                            fingerprint_waf=opt.saveFingerprints, provided_headers=opt.extraHeaders,
-                            traffic_file=opt.trafficFile, throttle=opt.sleepTimeThrottle,
-                            req_timeout=opt.requestTimeout, post_data=opt.postRequestData,
-                            request_type=request_type, check_server=opt.determineWebServer,
-                            threaded=opt.threaded, force_file_creation=opt.forceFileCreation,
-                            save_copy_of_file=opt.outputDirectory, html_report=opt.htmlReport,
-                            tamper_profile=opt.tamperProfile, tamper_chain_depth=opt.tamperChainDepth,
-                            tamper_chain_budget=opt.tamperChainBudget, tamper_variants=opt.tamperVariants,
-                            tamper_seed=opt.tamperSeed, payload_type=opt.payloadType,
-                            adaptive_bypass=opt.adaptiveBypass, bypass_families=opt.bypassFamilies,
-                            detection_depth=opt.detectionDepth
+                            url, payload_list, cursor,
+                            **_detection_kwargs(opt, request_type, payload_list, cursor, agent, proxy)
                         )
                         time.sleep(0.5)
             else:

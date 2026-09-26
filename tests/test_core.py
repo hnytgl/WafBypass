@@ -106,18 +106,24 @@ class RequestTests(unittest.TestCase):
         response.content = b"<html>ok</html>"
         response.status_code = 200
         response.headers = {}
-        with mock.patch("lib.settings.requests.get", return_value=response) as get:
+        with mock.patch("lib.settings._get_session") as mock_session_fn:
+            mock_session = mock.Mock()
+            mock_session.get.return_value = response
+            mock_session_fn.return_value = mock_session
             settings.get_page("https://example.test/")
-        self.assertNotIn("data", get.call_args.kwargs)
-        self.assertTrue(get.call_args.kwargs["verify"])
+        self.assertNotIn("data", mock_session.get.call_args.kwargs)
+        self.assertTrue(mock_session.get.call_args.kwargs["verify"])
 
     def test_tls_verification_can_be_explicitly_disabled(self):
         response = mock.Mock(content=b"ok", status_code=200, headers={})
         settings.configure_tls_verification(False)
         try:
-            with mock.patch("lib.settings.requests.get", return_value=response) as get:
+            with mock.patch("lib.settings._get_session") as mock_session_fn:
+                mock_session = mock.Mock()
+                mock_session.get.return_value = response
+                mock_session_fn.return_value = mock_session
                 settings.get_page("https://example.test/")
-            self.assertFalse(get.call_args.kwargs["verify"])
+            self.assertFalse(mock_session.get.call_args.kwargs["verify"])
         finally:
             settings.configure_tls_verification(True)
 
