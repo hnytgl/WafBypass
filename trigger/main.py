@@ -12,8 +12,10 @@ from content import (
 from lib.settings import (
     configure_request_headers,
     configure_tls_verification,
+    configure_transport,
     auto_assign,
     get_page,
+    close_session,
     WAF_REQUEST_DETECTION_PAYLOADS,
     BANNER,
     InvalidURLProvided,
@@ -80,6 +82,67 @@ def main():
         time.sleep(2)
         WAFBypassParser().cmd_parser().print_help()
         exit(0)
+
+    # --fingerprint: show client TLS fingerprint and exit
+    if opt.showFingerprint:
+        from lib.transport import fetch_client_fingerprint, get_backend_info
+        import json as _json
+
+        backend_info = get_backend_info()
+        info("transport backend: {} (curl_cffi available: {})".format(
+            backend_info["default_backend"], backend_info["curl_cffi_available"]
+        ))
+        if opt.impersonate:
+            info("impersonation target: {}".format(opt.impersonate))
+
+        info("fetching TLS fingerprint from tls.peet.ws ...")
+        fp = fetch_client_fingerprint(
+            proxy=getattr(opt, "runBehindProxy", None),
+            verify=not opt.disableTlsVerification,
+        )
+        if fp is None:
+            fatal("failed to fetch fingerprint (network unreachable or tls.peet.ws down)")
+            exit(1)
+
+        print("\n" + "=" * 60)
+        print("  CLIENT TLS/HTTP FINGERPRINT")
+        print("=" * 60)
+        if "ja3_hash" in fp:
+            print("  JA3 hash:    {}".format(fp["ja3_hash"]))
+        if "ja3_text" in fp:
+            print("  JA3 text:    {}".format(fp["ja3_text"][:120]))
+        if "ja4" in fp:
+            print("  JA4:         {}".format(fp["ja4"]))
+        if "http2" in fp:
+            h2 = fp["http2"]
+            if isinstance(h2, dict):
+                print("  HTTP/2:      akamai={}".format(h2.get("akamai_fingerprint", "n/a")))
+                print("  H2 headers:  {}".format(len(h2.get("sent_frames", []))))
+        if "user_agent" in fp:
+            print("  User-Agent:  {}".format(fp["user_agent"]))
+        if "tls_version" in fp:
+            print("  TLS version: {}".format(fp["tls_version"]))
+        if "_note" in fp:
+            print("  Note:        {}".format(fp["_note"]))
+        print("=" * 60)
+        print("\n  Full JSON:")
+        print(_json.dumps(fp, indent=2)[:2000])
+        print()
+
+        if not backend_info["curl_cffi_available"]:
+            warn(
+                "curl_cffi is NOT installed. Your TLS fingerprint is Python's default, "
+                "which is easily blocked by Cloudflare/Akamai/DataDome.\n"
+                "  Install with: pip install wafbypass[impersonate]\n"
+                "  Then use:     wafbypass --impersonate chrome120 -u <target>"
+            )
+        exit(0)
+
+    # configure transport layer (impersonation + cookie jar)
+    configure_transport(
+        impersonate=opt.impersonate,
+        cookie_jar=opt.cookieJar,
+    )
 
     # if you feel that you have to many folders or files in the wafbypass home folder
     # we'll give you an option to clean it free of charge
@@ -576,3 +639,14 @@ def main():
             )
         )
         request_issue_creation(exception_data)
+    finally:
+        # export cookies if requested (even on abort, cookies may be useful)
+        if opt.exportCookies:
+            try:
+                from lib.settings import _get_session
+                session = _get_session()
+                count = session.export_cookie_jar(opt.exportCookies)
+                info("exported {} cookies to '{}'".format(count, opt.exportCookies))
+            except Exception as e:
+                warn("failed to export cookies: {}".format(e))
+        close_session()

@@ -136,6 +136,9 @@ _AGENT_CACHE = None
 # module-level shared HTTP session (connection pooling + cookie jar)
 _SESSION = None
 
+# TLS fingerprint impersonation target (set via configure_transport)
+_IMPERSONATE = None
+
 # arguments that need to be blocked from issue creations and waf creations
 SENSITIVE_ARGUMENTS = ("--proxy", "-u", "--url", "-D", "--data", "--pa", "-b", "--burp")
 
@@ -249,22 +252,44 @@ def get_query(url):
 
 def _get_session():
     """
-    return a module-level requests.Session for connection pooling,
-    keep-alive and cookie persistence (e.g. Cloudflare cf_clearance).
-    Created lazily on first use.
+    Return the module-level TransportSession for connection pooling,
+    keep-alive, cookie persistence and optional TLS impersonation.
+    Created lazily on first use via lib.transport.
     """
     global _SESSION
     if _SESSION is None:
-        _SESSION = requests.Session()
-        adapter = requests.adapters.HTTPAdapter(
-            pool_connections=10,
-            pool_maxsize=20,
-            max_retries=0,
-            pool_block=False
+        import lib.transport
+        _SESSION = lib.transport.create_session(
+            impersonate=_IMPERSONATE,
+            verify=TLS_VERIFY,
+            timeout=15,
         )
-        _SESSION.mount("http://", adapter)
-        _SESSION.mount("https://", adapter)
     return _SESSION
+
+
+def configure_transport(impersonate=None, cookie_jar=None):
+    """
+    Configure the transport layer before first request.
+    Called from main() after CLI parsing.
+
+    Args:
+        impersonate: TLS fingerprint target (e.g. "chrome120") or None.
+        cookie_jar: path to Netscape cookie file to preload, or None.
+    """
+    global _IMPERSONATE, _SESSION
+    _IMPERSONATE = impersonate
+    # Reset session so it gets recreated with new settings
+    if _SESSION is not None:
+        _SESSION.close()
+        _SESSION = None
+    # Pre-create session if cookie jar provided
+    if cookie_jar:
+        session = _get_session()
+        try:
+            count = session.load_cookie_jar(cookie_jar)
+            lib.formatter.info("loaded {} cookies from '{}'".format(count, cookie_jar))
+        except Exception as e:
+            lib.formatter.warn("failed to load cookie jar '{}': {}".format(cookie_jar, e))
 
 
 def close_session():
@@ -322,10 +347,13 @@ def get_page(url, **kwargs):
     try:
         request_kwargs = {
             "headers": headers,
-            "proxies": proxies,
             "timeout": req_timeout,
-            "verify": verify_tls,
         }
+        # Only pass proxies/verify per-request for requests backend;
+        # curl_cffi sessions have these configured at creation time.
+        if session.backend == "requests":
+            request_kwargs["proxies"] = proxies
+            request_kwargs["verify"] = verify_tls
         if request_method == "POST":
             resp = session.post(url, data=post_data, **request_kwargs)
         else:
@@ -339,12 +367,19 @@ def get_page(url, **kwargs):
     except requests.exceptions.RequestException:
         return error_retval
     except Exception as e:
-        if "timed out" in str(e).lower():
+        # curl_cffi raises its own exception types; catch broadly
+        err_str = str(e).lower()
+        if "timed out" in err_str or "timeout" in err_str:
+            return error_retval
+        if "connection" in err_str or "ssl" in err_str or "curl" in err_str:
             return error_retval
         raise
     finally:
         if resp is not None:
-            resp.close()
+            try:
+                resp.close()
+            except Exception:
+                pass
 
 
 def get_random_agent(path="{}/files/user_agents.txt"):

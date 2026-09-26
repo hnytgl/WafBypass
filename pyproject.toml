@@ -31,6 +31,7 @@ classifiers = [
 [project.optional-dependencies]
 tor = ["PySocks>=1.7.1"]
 socks = ["PySocks>=1.7.1"]
+impersonate = ["curl_cffi>=0.7.0"]
 dev = ["build>=1.2", "pytest>=8.0", "ruff>=0.4", "mypy>=1.10", "bandit>=1.7", "pip-audit>=2.7"]
 
 [project.scripts]
