@@ -769,10 +769,27 @@ def detection_main(url, payloads, cursor, **kwargs):
                 lib.formatter.debug("YAML signature engine unavailable: {}".format(e))
             sig_engine = None
 
-    # Load Python plugins as fallback (for complex plugins not yet migrated)
-    loaded_plugins = ScriptQueue(
+    # Load Python plugins as fallback (only for products NOT covered by YAML signatures)
+    all_plugins = ScriptQueue(
         lib.settings.PLUGINS_DIRECTORY, lib.settings.PLUGINS_IMPORT_TEMPLATE, verbose=verbose
     ).load_scripts()
+
+    # Filter out plugins whose product is already covered by the YAML engine
+    if sig_engine is not None:
+        yaml_products = set(sig_engine.products)
+        loaded_plugins = [
+            p for p in all_plugins
+            if getattr(p, "__product__", None) not in yaml_products
+        ]
+        skipped = len(all_plugins) - len(loaded_plugins)
+        if verbose and skipped:
+            lib.formatter.debug(
+                "{} Python plugins skipped (covered by YAML signatures), {} fallback plugins active".format(
+                    skipped, len(loaded_plugins)
+                )
+            )
+    else:
+        loaded_plugins = all_plugins
 
     lib.formatter.info("running firewall detection checks")
     temp = []
@@ -793,11 +810,8 @@ def detection_main(url, payloads, cursor, **kwargs):
                 match_counts[result.product] = match_counts.get(result.product, 0) + 1
                 match_statuses.setdefault(result.product, set()).add(status)
 
-        # Phase 2: Python plugin fallback (only for products not already matched by YAML)
+        # Phase 2: Python plugin fallback (only plugins not covered by YAML)
         for detection in loaded_plugins:
-            product_name = getattr(detection, "__product__", None)
-            if product_name and product_name in yaml_matched_products:
-                continue  # Already detected by YAML engine, skip redundant check
             if verbose:
                 lib.formatter.debug("running {}".format(detection))
             try:

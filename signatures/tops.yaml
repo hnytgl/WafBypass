@@ -4,26 +4,19 @@ version: '2026.09'
 detection:
   match_all_headers: true
   patterns:
-  - regex: topsec
-    fields: &id001
-    - body
-    - server
-  - regex: tops
-    fields: *id001
-  - regex: 天融信
-    fields: *id001
+    - regex: "\\btopsec\\b"
+      fields: [body, server]
+    - regex: "\\btops\\b"
+      fields: [server]
+    - regex: "天融信"
+      fields: [body, server]
   status_rules:
-  - status:
-    - 403
-    - 405
-    patterns:
-    - regex: topsec
-      fields:
-      - server
-    - regex: tops
-      fields:
-      - server
-    - regex: 天融信
-      fields:
-      - server
+    - status: [403, 405]
+      patterns:
+        - regex: "\\btopsec\\b"
+          fields: [server]
+        - regex: "\\btops\\b"
+          fields: [server]
+        - regex: "天融信"
+          fields: [server]
 confidence: medium

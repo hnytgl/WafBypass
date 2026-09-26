@@ -346,9 +346,18 @@ class SignatureEngine:
 
         Returns:
             List of DetectionResult for all matching signatures.
+
+        Performance: body is truncated to first 64KB for regex matching.
+        WAF block pages are typically <10KB; checking 335KB+ of normal HTML
+        against 111 signatures is wasteful and causes false positives from
+        incidental keyword matches in large pages.
         """
         results = []
         content_str = str(content) if content else ""
+        # Truncate body for matching: WAF block/error pages are small.
+        # Large normal pages (news sites, apps) don't need full-body regex.
+        if len(content_str) > 65536:
+            content_str = content_str[:65536]
 
         for sig in self.signatures:
             if sig.match(content_str, headers, status):
