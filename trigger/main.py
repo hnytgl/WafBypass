@@ -363,7 +363,7 @@ def main():
     # do a little check to make sure you have it installed
     if opt.runBehindTor or opt.runBehindProxy is not None and "socks" in opt.runBehindProxy:
         try:
-            import socks
+            import socks  # noqa: F401
         except ImportError:
             # if you don't we will go ahead and exit the system with an error message
             error(

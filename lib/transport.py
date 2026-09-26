@@ -17,7 +17,6 @@ Usage:
 
 import importlib.util
 import http.cookiejar
-import os
 
 import requests
 import requests.adapters

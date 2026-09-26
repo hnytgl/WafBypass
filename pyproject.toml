@@ -62,7 +62,11 @@ line-length = 120
 # Enable real error detection; skip style/upgrade rules that would
 # require reformatting the entire pre-existing codebase.
 select = ["E", "F", "W"]
-ignore = ["E501"]  # line length handled by formatter, not linter
+ignore = ["E501", "E731", "E741"]  # line length, lambda assignment, ambiguous names
 
 [tool.ruff.lint.per-file-ignores]
-"content/*" = ["F401"]  # plugin/tamper modules use implicit exports
+# Plugin/tamper files are community-contributed with pre-existing style debt;
+# only catch real errors (F821 undefined name, F811 redefinition) there.
+"content/*" = ["E722", "E731", "W605", "W292", "F401", "F841"]
+"content/plugins/*" = ["E722", "E731", "W605", "W292", "F401", "F841"]
+"content/tampers/*" = ["E722", "E731", "W605", "W292", "F401", "F841"]
