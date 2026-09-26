@@ -224,7 +224,7 @@ class SignatureUpdater:
                             # Prevent path traversal
                             if not os.path.isabs(member.name) and ".." not in member.name:
                                 safe_members.append(member)
-                    tar.extractall(tmpdir, members=safe_members)
+                    tar.extractall(tmpdir, members=safe_members)  # nosec B202 - members pre-validated above
 
                 # Count and move YAML files
                 count = 0
